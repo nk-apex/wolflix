@@ -1,0 +1,189 @@
+Hover Effects:
+
+Cards: hover:scale-[1.02] hover:border-primary/40
+
+Buttons: hover:scale-105 hover:bg-primary/20
+
+Icons: group-hover:rotate-45 transition-transform
+
+Typography:
+
+Headings: text-3xl font-display font-bold text-white
+
+Subheadings: text-gray-400 text-xs uppercase tracking-wider
+
+Body: text-gray-500 font-mono text-sm
+
+APPLICATION STRUCTURE: WOLFLIX
+SIDEBAR NAVIGATION (Like Movie Box):
+Create a sleek sidebar with these menu items:
+
+text
+WOLFLIX LOGO
+─────────────
+🎬 WELCOME
+🎥 MOVIES
+📺 TV SHOWS
+🎭 SERIES
+🧙 ANIMATION
+📖 NOVEL
+🔥 MOST VIEWED
+📱 APPLICATION
+─────────────
+🔍 SEARCH
+⚙️ SETTINGS
+👤 PROFILE
+PAGES TO CREATE:
+1. WELCOME PAGE (Dashboard)
+Hero section with WOLFLIX branding
+
+Featured content carousel
+
+Quick stats:
+
+Total Movies Available
+
+Active Streams
+
+New Releases
+
+System Status (Uptime)
+
+Quick actions: Browse Now, Top Picks, Continue Watching
+
+2. MOVIES PAGE
+Using TMDB API with your key: 999a2c8d29cd1833fa98446f909f19eb
+
+Implement these categories:
+
+🔥 Trending Movies (daily)
+
+💥 Action Movies (genre 28)
+
+🚀 Sci-Fi Movies (genre 878)
+
+👻 Horror Movies (genre 27)
+
+🎭 Drama Movies (genre 18)
+
+😂 Comedy Movies (genre 35)
+
+3. TV SHOWS PAGE
+📺 Trending TV Shows (daily)
+
+🔥 Action & Adventure TV (genre 10759)
+
+🚀 Sci-Fi & Fantasy TV (genre 10765)
+
+🎨 Animation TV (genre 16)
+
+🏰 Drama Series
+
+📜 Documentary Series
+
+4. SERIES PAGE
+Complete series collections
+
+Episode guides
+
+Season overviews
+
+Continue watching progress
+
+5. ANIMATION PAGE
+Animated Movies
+
+Anime Series
+
+Cartoon Collections
+
+Animated Shorts
+
+6. NOVEL PAGE
+Book adaptations
+
+Story-based content
+
+Literary classics
+
+Graphic novels
+
+7. MOST VIEWED PAGE
+Top 10 trending
+
+Popular this week
+
+All-time favorites
+
+Editor's picks
+
+8. APPLICATION PAGE
+Download mobile apps
+
+Browser extensions
+
+Desktop application
+
+Settings & preferences
+
+API INTEGRATION DETAILS:
+MOVIES & TV SHOWS API (TMDB):
+javascript
+const KEY = "999a2c8d29cd1833fa98446f909f19eb";
+const IMG = "https://image.tmdb.org/t/p/w342";
+
+// Required functions:
+- loadMovies(category, genreId) - Load movies by category
+- loadTVShows(category, genreId) - Load TV shows by category
+- searchContent(query) - Search across all content
+- getTrending() - Get trending content
+- getDetails(id, type) - Get detailed information
+STREAMING & DOWNLOAD FUNCTIONS:
+javascript
+// Streaming (opens in new tab):
+function openStream(type, id) {
+  window.open(`https://vidsrc.cc/v2/embed/${type}/${id}`, "_blank");
+}
+
+// Download (opens in new tab):
+function openDownload(type, id) {
+  window.open(`https://vidsrc.me/download/${type}?tmdb=${id}`, "_blank");
+}
+
+// For music integration:
+async function downloadAudio(youtubeUrl) {
+  const response = await axios.get(
+    `https://apiskeith.vercel.app/download/audio?url=${encodeURIComponent(youtubeUrl)}`,
+    { timeout: 15000 }
+  );
+  return response.data;
+}
+
+async function downloadVideo(youtubeUrl) {
+  const response = await axios.get(
+    `https://apiskeith.vercel.app/download/video?url=${encodeURIComponent(youtubeUrl)}`,
+    { timeout: 30000 }
+  );
+  return response.data;
+}
+MUSIC SEARCH API:
+javascript
+const instances = [
+  'https://invidious.fdn.fr',
+  'https://inv.riverside.rocks',
+  'https://vid.puffyan.us'
+];
+
+async function searchMusic(query) {
+  for (const instance of instances) {
+    try {
+      const response = await axios.get(
+        `${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video`,
+        { timeout: 8000 }
+      );
+      return response.data;
+    } catch (error) {
+      continue; // Try next instance
+    }
+  }
+}
