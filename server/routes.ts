@@ -3,12 +3,20 @@ import { createServer, type Server } from "http";
 
 const TMDB_KEY = process.env.TMDB_API_KEY || "";
 const TMDB_BASE = "https://api.themoviedb.org/3";
+const ARSLAN_BASE = "https://arslan-apis.vercel.app/movie";
 
 async function tmdbFetch(path: string): Promise<any> {
   const separator = path.includes("?") ? "&" : "?";
   const url = `${TMDB_BASE}${path}${separator}api_key=${TMDB_KEY}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`TMDB error: ${res.status}`);
+  return res.json();
+}
+
+async function arslanFetch(path: string): Promise<any> {
+  const url = `${ARSLAN_BASE}${path}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Arslan API error: ${res.status}`);
   return res.json();
 }
 
@@ -182,6 +190,90 @@ export async function registerRoutes(
   app.get("/api/tmdb/search/:query", async (req, res) => {
     try {
       const data = await tmdbFetch(`/search/multi?query=${encodeURIComponent(req.params.query)}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/tmdb/movie/:id", async (req, res) => {
+    try {
+      const data = await tmdbFetch(`/movie/${req.params.id}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/tmdb/tv/:id", async (req, res) => {
+    try {
+      const data = await tmdbFetch(`/tv/${req.params.id}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/arslan/search", async (req, res) => {
+    try {
+      const text = req.query.text as string;
+      if (!text) return res.status(400).json({ error: "text query required" });
+      const data = await arslanFetch(`/pirate/search?text=${encodeURIComponent(text)}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/arslan/movie", async (req, res) => {
+    try {
+      const url = req.query.url as string;
+      if (!url) return res.status(400).json({ error: "url query required" });
+      const data = await arslanFetch(`/pirate/movie?url=${encodeURIComponent(url)}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/arslan/sinhalasub/search", async (req, res) => {
+    try {
+      const text = req.query.text as string;
+      if (!text) return res.status(400).json({ error: "text query required" });
+      const data = await arslanFetch(`/sinhalasub/search?text=${encodeURIComponent(text)}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/arslan/sinhalasub/movie", async (req, res) => {
+    try {
+      const url = req.query.url as string;
+      if (!url) return res.status(400).json({ error: "url query required" });
+      const data = await arslanFetch(`/sinhalasub/movie?url=${encodeURIComponent(url)}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/arslan/sinhalasub/tvshow", async (req, res) => {
+    try {
+      const url = req.query.url as string;
+      if (!url) return res.status(400).json({ error: "url query required" });
+      const data = await arslanFetch(`/sinhalasub/tvshow?url=${encodeURIComponent(url)}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/arslan/sinhalasub/episode", async (req, res) => {
+    try {
+      const url = req.query.url as string;
+      if (!url) return res.status(400).json({ error: "url query required" });
+      const data = await arslanFetch(`/sinhalasub/episode?url=${encodeURIComponent(url)}`);
       res.json(data);
     } catch (e: any) {
       res.status(500).json({ error: e.message });

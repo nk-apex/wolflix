@@ -17,6 +17,7 @@ import Application from "@/pages/application";
 import Search from "@/pages/search";
 import SettingsPage from "@/pages/settings";
 import Profile from "@/pages/profile";
+import Watch from "@/pages/watch";
 
 function Router() {
   return (
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/search" component={Search} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/profile" component={Profile} />
+      <Route path="/watch/:type/:id" component={Watch} />
       <Route component={NotFound} />
     </Switch>
   );

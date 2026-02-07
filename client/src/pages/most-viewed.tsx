@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { type TMDBMovie, getImageUrl, getRating, openStream } from "@/lib/tmdb";
+import { useLocation } from "wouter";
+import { type TMDBMovie, getImageUrl, getRating } from "@/lib/tmdb";
+import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/glass-card";
 import { ContentRow } from "@/components/content-row";
 import { TrendingUp, Star, Play, Crown, Heart } from "lucide-react";
@@ -8,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface TMDBRes { results: TMDBMovie[] }
 
 export default function MostViewed() {
+  const [, navigate] = useLocation();
   const { data: top10, isLoading: l1 } = useQuery<TMDBRes>({ queryKey: ["/api/tmdb/movies/trending"] });
   const { data: popular, isLoading: l2 } = useQuery<TMDBRes>({ queryKey: ["/api/tmdb/movies/popular"] });
   const { data: topRated, isLoading: l3 } = useQuery<TMDBRes>({ queryKey: ["/api/tmdb/movies/top_rated"] });
@@ -33,31 +36,33 @@ export default function MostViewed() {
                 <Skeleton key={i} className="h-24 rounded-2xl bg-green-900/10" />
               ))
             : topItems.map((item, index) => (
-                <GlassCard key={item.id} className="flex items-center gap-4 p-3 pr-5">
+                <GlassCard key={item.id} className="flex items-center gap-4 p-3 pr-5" onClick={() => navigate(`/watch/${item.media_type === "tv" ? "tv" : "movie"}/${item.id}`)}>
                   <div className="flex-shrink-0 w-10 text-center">
-                    <span className={`text-2xl font-display font-bold ${index < 3 ? "text-green-400" : "text-gray-600"}`}>
+                    <span className={`text-2xl font-display font-bold ${index < 3 ? "text-green-400" : "text-gray-600"}`} data-testid={`text-rank-${item.id}`}>
                       {index + 1}
                     </span>
                   </div>
                   <div className="flex-shrink-0 w-14 h-20 rounded-lg overflow-hidden">
                     {item.poster_path && (
-                      <img src={getImageUrl(item.poster_path, "w185")} alt="" className="w-full h-full object-cover" />
+                      <img src={getImageUrl(item.poster_path, "w185")} alt="" className="w-full h-full object-cover" data-testid={`img-top-${item.id}`} />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-display font-bold text-white text-sm truncate">{item.title || item.name}</h3>
+                    <h3 className="font-display font-bold text-white text-sm truncate" data-testid={`text-top-title-${item.id}`}>{item.title || item.name}</h3>
                     <div className="flex items-center gap-2 mt-1">
                       <Star className="w-3 h-3 text-green-400 fill-green-400" />
-                      <span className="text-xs font-mono text-green-400">{getRating(item.vote_average)}</span>
+                      <span className="text-xs font-mono text-green-400" data-testid={`text-top-rating-${item.id}`}>{getRating(item.vote_average)}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => openStream(item.media_type === "tv" ? "tv" : "movie", item.id)}
-                    className="flex-shrink-0 rounded-lg bg-green-500/10 border border-green-500/20 p-2 text-green-400 transition-all hover:bg-green-500/20"
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={(e) => { e.stopPropagation(); navigate(`/watch/${item.media_type === "tv" ? "tv" : "movie"}/${item.id}`); }}
+                    className="flex-shrink-0 bg-green-500/10 border border-green-500/20 text-green-400"
                     data-testid={`button-play-top-${item.id}`}
                   >
                     <Play className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </GlassCard>
               ))}
         </div>

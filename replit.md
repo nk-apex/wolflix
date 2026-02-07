@@ -22,21 +22,34 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `/search` - Search movies & TV shows
 - `/settings` - User preferences
 - `/profile` - User profile
+- `/watch/:type/:id` - Watch page with embedded player, movie details, and download links
 
 ## API Routes
-All prefixed with `/api/tmdb/`:
+### TMDB API (content browsing) - `/api/tmdb/`
 - `trending` - Trending all
 - `movies/trending`, `movies/popular`, `movies/top_rated`, `movies/genre/:id`
 - `tv/trending`, `tv/popular`, `tv/top_rated`, `tv/airing_today`, `tv/genre/:id`
 - `animation/movies`, `animation/anime`, `animation/tv`, `animation/family`
 - `novel/adaptations`, `novel/classics`, `novel/fantasy`, `novel/series`
 - `search/:query` - Multi search
+- `movie/:id`, `tv/:id` - Individual movie/TV detail
+
+### Arslan API (streaming/downloads) - `/api/arslan/`
+- `search?text=` - Search for movies with download links (pirate source)
+- `movie?url=` - Get movie details + download links
+- `sinhalasub/search?text=`, `sinhalasub/movie?url=`, `sinhalasub/tvshow?url=`, `sinhalasub/episode?url=` - Sinhalasub sources
+
+## Streaming
+- Clicking any content card navigates to `/watch/:type/:id`
+- Watch page has embedded VidSrc/Embed player for streaming
+- Download links fetched from Arslan Pirate API by searching movie title
+- Multiple download sources with quality/size info
 
 ## Environment Variables
 - `TMDB_API_KEY` - TMDB API key for fetching movie/TV data
 
 ## Key Components
 - `GlassCard` / `GlassPanel` - Glass-morphism card components
-- `ContentCard` - Movie/TV show poster card with stream/download buttons
+- `ContentCard` - Movie/TV show poster card, navigates to Watch page on click
 - `ContentRow` - Horizontally scrollable content row
 - `AppSidebar` - Navigation sidebar using Shadcn sidebar primitives
