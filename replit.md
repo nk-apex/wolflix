@@ -41,7 +41,8 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 
 ## Streaming
 - Clicking any content card navigates to `/watch/:type/:id`
-- Watch page has embedded VidSrc/Embed player for streaming
+- Watch page has embedded player with 3 server options (MultiEmbed, AutoEmbed, 2Embed) - no VidSrc
+- Fullscreen toggle button on the player using browser Fullscreen API
 - Download links fetched from Arslan Pirate API by searching movie title
 - Multiple download sources with quality/size info
 

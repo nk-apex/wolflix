@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search } from "lucide-react";
+import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
@@ -55,7 +55,24 @@ export default function Watch() {
   const id = params?.id || "";
 
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
-  const [streamServer, setStreamServer] = useState<"vidsrc" | "embed">("vidsrc");
+  const [streamServer, setStreamServer] = useState<"multiembed" | "autoembed" | "2embed">("multiembed");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!playerContainerRef.current) return;
+    if (!document.fullscreenElement) {
+      playerContainerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
 
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBDetail>({
     queryKey: ["/api/tmdb", type, id],
@@ -90,9 +107,12 @@ export default function Watch() {
   const movieDetail = arslanDetail?.result?.data;
   const dlLinks = movieDetail?.dl_links || [];
 
-  const streamUrl = streamServer === "vidsrc"
-    ? `https://vidsrc.cc/v2/embed/${type}/${id}`
-    : `https://vidsrc.me/embed/${type}?tmdb=${id}`;
+  const streamUrls: Record<string, string> = {
+    multiembed: `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,
+    autoembed: type === "movie" ? `https://autoembed.co/movie/tmdb/${id}` : `https://autoembed.co/tv/tmdb/${id}`,
+    "2embed": `https://www.2embed.cc/embed/${id}`,
+  };
+  const streamUrl = streamUrls[streamServer];
 
   const backdropUrl = getImageUrl(tmdbData?.backdrop_path || null, "w1280");
   const posterUrl = getImageUrl(tmdbData?.poster_path || null, "w500");
@@ -197,33 +217,51 @@ export default function Watch() {
                 <span className="text-xs font-mono text-gray-500" data-testid="text-server-label">Server:</span>
                 <Button
                   size="sm"
-                  variant={streamServer === "vidsrc" ? "default" : "ghost"}
-                  onClick={() => setStreamServer("vidsrc")}
-                  className={`text-xs font-mono ${streamServer === "vidsrc" ? "bg-green-500 text-black" : "text-gray-400"}`}
-                  data-testid="button-server-vidsrc"
+                  variant={streamServer === "multiembed" ? "default" : "ghost"}
+                  onClick={() => setStreamServer("multiembed")}
+                  className={`text-xs font-mono ${streamServer === "multiembed" ? "bg-green-500 text-black" : "text-gray-400"}`}
+                  data-testid="button-server-multiembed"
                 >
-                  VidSrc
+                  Server 1
                 </Button>
                 <Button
                   size="sm"
-                  variant={streamServer === "embed" ? "default" : "ghost"}
-                  onClick={() => setStreamServer("embed")}
-                  className={`text-xs font-mono ${streamServer === "embed" ? "bg-green-500 text-black" : "text-gray-400"}`}
-                  data-testid="button-server-embed"
+                  variant={streamServer === "autoembed" ? "default" : "ghost"}
+                  onClick={() => setStreamServer("autoembed")}
+                  className={`text-xs font-mono ${streamServer === "autoembed" ? "bg-green-500 text-black" : "text-gray-400"}`}
+                  data-testid="button-server-autoembed"
                 >
-                  Embed
+                  Server 2
+                </Button>
+                <Button
+                  size="sm"
+                  variant={streamServer === "2embed" ? "default" : "ghost"}
+                  onClick={() => setStreamServer("2embed")}
+                  className={`text-xs font-mono ${streamServer === "2embed" ? "bg-green-500 text-black" : "text-gray-400"}`}
+                  data-testid="button-server-2embed"
+                >
+                  Server 3
                 </Button>
               </div>
             </div>
-            <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-green-500/20 bg-black">
+            <div ref={playerContainerRef} className="relative w-full aspect-video rounded-xl overflow-hidden border border-green-500/20 bg-black">
               <iframe
                 src={streamUrl}
                 className="absolute inset-0 w-full h-full"
                 allowFullScreen
-                allow="autoplay; encrypted-media; fullscreen"
+                allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 referrerPolicy="origin"
                 data-testid="iframe-player"
               />
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={toggleFullscreen}
+                className="absolute top-3 right-3 z-20 bg-black/60 text-white backdrop-blur-sm"
+                data-testid="button-fullscreen"
+              >
+                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+              </Button>
             </div>
           </GlassPanel>
 
