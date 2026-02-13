@@ -384,6 +384,43 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/tmdb/movie/:id/external_ids", async (req, res) => {
+    try {
+      const data = await tmdbFetch(`/movie/${req.params.id}/external_ids`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/tmdb/tv/:id/external_ids", async (req, res) => {
+    try {
+      const data = await tmdbFetch(`/tv/${req.params.id}/external_ids`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // =============================================
+  // IMDB API Endpoints (via imdbapi.dev)
+  // =============================================
+
+  app.get("/api/imdb/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query) return res.status(400).json({ error: "q query required" });
+      const response = await fetch(`https://api.imdbapi.dev/search/titles?query=${encodeURIComponent(query)}`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) throw new Error(`IMDB API error: ${response.status}`);
+      const data = await response.json();
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // =============================================
   // Arslan API Endpoints (kept for compatibility)
   // =============================================

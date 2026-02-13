@@ -24,7 +24,10 @@ interface TMDBDetail {
   number_of_seasons?: number;
   number_of_episodes?: number;
   status: string;
+  imdb_id?: string;
 }
+
+const ZONE_BASE = "https://zone.bwmxmd.co.ke";
 
 export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
@@ -35,6 +38,7 @@ export default function Watch() {
   const urlParams = new URLSearchParams(window.location.search);
   const source = urlParams.get("source") || "tmdb";
   const isMovieBox = source === "moviebox";
+  const isZone = source === "zone";
 
   const mbItemFromStorage = useMemo(() => {
     if (!isMovieBox || !id) return null;
@@ -78,8 +82,20 @@ export default function Watch() {
   const tmdbEndpoint = type === "tv" ? `/api/tmdb/tv/${id}` : `/api/tmdb/movie/${id}`;
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBDetail>({
     queryKey: [tmdbEndpoint],
-    enabled: !!id && !isMovieBox,
+    enabled: !!id && !isMovieBox && !isZone,
   });
+
+  const { data: externalIds } = useQuery<{ imdb_id?: string }>({
+    queryKey: [`/api/tmdb/${type}/${id}/external_ids`],
+    enabled: !!id && !isMovieBox && !isZone && type === "tv",
+  });
+
+  const imdbId = useMemo(() => {
+    if (isZone && id.startsWith("tt")) return id;
+    if (type === "movie" && tmdbData?.imdb_id) return tmdbData.imdb_id;
+    if (type === "tv" && externalIds?.imdb_id) return externalIds.imdb_id;
+    return null;
+  }, [type, tmdbData, externalIds, isZone, id]);
 
   const { data: mbDetailRec } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
     queryKey: ["/api/wolfmovieapi/detail", id],
@@ -119,9 +135,13 @@ export default function Watch() {
 
   const effectiveMbItem = mbItem || recoveredMbItem;
 
-  const title = isMovieBox
-    ? (effectiveMbItem?.title || "")
-    : (tmdbData?.title || tmdbData?.name || "");
+  const zoneTitle = urlParams.get("title") || "";
+
+  const title = isZone
+    ? (zoneTitle || id)
+    : isMovieBox
+      ? (effectiveMbItem?.title || "")
+      : (tmdbData?.title || tmdbData?.name || "");
 
   const detailPath = effectiveMbItem?.detailPath || "";
 
@@ -159,6 +179,11 @@ export default function Watch() {
   const streamDomain = streamDomainData?.data || "https://123movienow.cc";
   const cleanStreamDomain = streamDomain.replace(/\/$/, "");
 
+  const zonePlayerUrl = useMemo(() => {
+    if (!imdbId) return "";
+    return `${ZONE_BASE}/movie/${imdbId}`;
+  }, [imdbId]);
+
   const movieBoxPlayerUrl = useMemo(() => {
     if (!effectiveSubjectId) return "";
     const se = type === "tv" ? selectedSeason : 0;
@@ -189,6 +214,9 @@ export default function Watch() {
 
   const allServers = useMemo(() => {
     const servers: { name: string; url: string; source: string }[] = [];
+    if (zonePlayerUrl) {
+      servers.push({ name: "Zone Stream", url: zonePlayerUrl, source: "zone" });
+    }
     if (movieBoxPlayerUrl) {
       servers.push({ name: "MovieBox Player", url: movieBoxPlayerUrl, source: "moviebox" });
     }
@@ -198,17 +226,17 @@ export default function Watch() {
       });
     }
     return servers;
-  }, [movieBoxPlayerUrl, embedServers, isMovieBox]);
+  }, [zonePlayerUrl, movieBoxPlayerUrl, embedServers, isMovieBox]);
 
   const activeServerUrl = allServers[selectedServer]?.url || "";
 
   const posterUrl = isMovieBox
     ? (effectiveMbItem ? getMovieBoxCover(effectiveMbItem) : "")
-    : getImageUrl(tmdbData?.poster_path || null, "w500");
+    : isZone ? "" : getImageUrl(tmdbData?.poster_path || null, "w500");
 
   const backdropUrl = isMovieBox
     ? (effectiveMbItem?.stills?.[0]?.url || "")
-    : getImageUrl(tmdbData?.backdrop_path || null, "w1280");
+    : isZone ? "" : getImageUrl(tmdbData?.backdrop_path || null, "w1280");
 
   const rating = isMovieBox
     ? (effectiveMbItem ? parseFloat(getMovieBoxRating(effectiveMbItem)) : 0)
@@ -224,7 +252,7 @@ export default function Watch() {
 
   const description = isMovieBox
     ? (effectiveMbItem?.description || "")
-    : (tmdbData?.overview || "");
+    : isZone ? "Stream this content directly on Zone Stream. Use the player above to watch." : (tmdbData?.overview || "");
 
   const duration = isMovieBox
     ? (effectiveMbItem?.duration ? Math.round(effectiveMbItem.duration / 60) : 0)
@@ -263,7 +291,7 @@ export default function Watch() {
     navigate(`/watch/${mediaType}/${target.subjectId}?source=moviebox`);
   };
 
-  if (tmdbLoading && !isMovieBox) {
+  if (tmdbLoading && !isMovieBox && !isZone) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
@@ -271,7 +299,7 @@ export default function Watch() {
     );
   }
 
-  const isSearching = !isMovieBox && !tmdbMbMatch && !!title;
+  const isSearching = !isMovieBox && !isZone && !tmdbMbMatch && !!title;
   const hasServers = allServers.length > 0;
 
   return (
@@ -462,7 +490,7 @@ export default function Watch() {
                       className={`font-mono text-xs ${selectedServer === i ? "bg-green-600 text-white" : "text-gray-400"}`}
                       data-testid={`button-server-${i}`}
                     >
-                      <Server className="w-3 h-3 mr-1" />
+                      {server.source === "zone" ? <Globe className="w-3 h-3 mr-1" /> : <Server className="w-3 h-3 mr-1" />}
                       {server.name}
                     </Button>
                   ))}
@@ -475,9 +503,9 @@ export default function Watch() {
                 <div className="text-center">
                   <Loader2 className="w-10 h-10 text-green-500/30 mx-auto mb-3 animate-spin" />
                   <p className="text-sm font-mono text-gray-500" data-testid="text-loading-stream">
-                    Searching MovieBox for this title...
+                    Finding streaming sources...
                   </p>
-                  <p className="text-xs font-mono text-gray-600 mt-1">Finding the best source</p>
+                  <p className="text-xs font-mono text-gray-600 mt-1">Connecting to stream servers</p>
                 </div>
               </div>
             ) : !hasServers ? (
@@ -487,7 +515,7 @@ export default function Watch() {
                   <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
                     No streaming source found for this title
                   </p>
-                  <p className="text-xs font-mono text-gray-600 mt-1">Try browsing MovieBox content directly</p>
+                  <p className="text-xs font-mono text-gray-600 mt-1">Try searching for a different title</p>
                 </div>
               </div>
             ) : (
@@ -499,8 +527,8 @@ export default function Watch() {
                   className="absolute inset-0 w-full h-full"
                   allowFullScreen
                   allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                  referrerPolicy="no-referrer"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+                  referrerPolicy="origin"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-top-navigation"
                   data-testid="iframe-player"
                 />
               </div>

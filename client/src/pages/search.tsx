@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Search as SearchIcon, X, Film, Tv, Zap } from "lucide-react";
+import { Search as SearchIcon, X, Film, Tv, Zap, Globe } from "lucide-react";
 import { ContentCard } from "@/components/content-card";
 import { MovieBoxCard } from "@/components/moviebox-card";
 import { type TMDBMovie } from "@/lib/tmdb";
@@ -10,11 +10,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 interface TMDBRes { results: TMDBMovie[] }
 
+interface IMDBTitle {
+  id: string;
+  type: string;
+  primaryTitle: string;
+  originalTitle: string;
+  primaryImage?: { url: string; width: number; height: number };
+  startYear: number;
+  genres: string[];
+}
+
+interface IMDBRes { titles: IMDBTitle[] }
+
 export default function Search() {
   const [location] = useLocation();
   const urlQ = new URLSearchParams(window.location.search).get("q") || "";
   const [query, setQuery] = useState(urlQ);
   const [searchTerm, setSearchTerm] = useState(urlQ);
+  const [, navigate] = useLocation();
 
   useEffect(() => {
     const currentQ = new URLSearchParams(window.location.search).get("q") || "";
@@ -23,7 +36,7 @@ export default function Search() {
       setSearchTerm(currentQ);
     }
   }, [location]);
-  const [activeTab, setActiveTab] = useState<"all" | "tmdb" | "moviebox">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "tmdb" | "moviebox" | "zone">("all");
 
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBRes>({
     queryKey: ["/api/tmdb/search", searchTerm],
@@ -45,6 +58,16 @@ export default function Search() {
     },
   });
 
+  const { data: imdbData, isLoading: imdbLoading } = useQuery<IMDBRes>({
+    queryKey: ["/api/imdb/search", searchTerm],
+    enabled: searchTerm.length > 1,
+    queryFn: async () => {
+      const res = await fetch(`/api/imdb/search?q=${encodeURIComponent(searchTerm)}`);
+      if (!res.ok) throw new Error("IMDB search failed");
+      return res.json();
+    },
+  });
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setSearchTerm(query.trim());
@@ -52,10 +75,17 @@ export default function Search() {
 
   const tmdbResults = tmdbData?.results || [];
   const mbResults = mbData?.data?.items || [];
-  const isLoading = tmdbLoading || mbLoading;
+  const imdbResults = imdbData?.titles || [];
+  const isLoading = tmdbLoading || mbLoading || imdbLoading;
 
   const showTmdb = activeTab === "all" || activeTab === "tmdb";
   const showMb = activeTab === "all" || activeTab === "moviebox";
+  const showZone = activeTab === "all" || activeTab === "zone";
+
+  const handleZoneClick = (item: IMDBTitle) => {
+    const mediaType = item.type === "tvSeries" || item.type === "tvMiniSeries" ? "tv" : "movie";
+    navigate(`/watch/${mediaType}/${item.id}?source=zone&title=${encodeURIComponent(item.primaryTitle)}`);
+  };
 
   return (
     <div className="min-h-screen px-6 py-8 max-w-6xl mx-auto">
@@ -89,7 +119,7 @@ export default function Search() {
       </form>
 
       {searchTerm && (
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
           <button
             onClick={() => setActiveTab("all")}
             className={`px-4 py-1.5 rounded-full text-xs font-mono transition-all ${
@@ -100,6 +130,17 @@ export default function Search() {
             data-testid="button-tab-all"
           >
             All
+          </button>
+          <button
+            onClick={() => setActiveTab("zone")}
+            className={`px-4 py-1.5 rounded-full text-xs font-mono transition-all ${
+              activeTab === "zone"
+                ? "bg-green-500 text-black font-bold"
+                : "bg-green-500/10 text-green-400 border border-green-500/20"
+            }`}
+            data-testid="button-tab-zone"
+          >
+            Zone ({imdbResults.length})
           </button>
           <button
             onClick={() => setActiveTab("tmdb")}
@@ -134,6 +175,49 @@ export default function Search() {
               <Skeleton className="w-3/4 h-4 mt-3 rounded bg-green-900/10" />
             </div>
           ))}
+        </div>
+      )}
+
+      {!isLoading && searchTerm && showZone && imdbResults.length > 0 && (
+        <div className="mb-8">
+          {activeTab === "all" && (
+            <div className="flex items-center gap-2 mb-4">
+              <Globe className="w-4 h-4 text-green-400" />
+              <h3 className="text-sm font-mono font-bold text-gray-400 uppercase tracking-wider">Zone Stream Results</h3>
+            </div>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {imdbResults.filter(r => r.primaryImage?.url).map((item) => (
+              <div
+                key={item.id}
+                onClick={() => handleZoneClick(item)}
+                className="cursor-pointer group"
+                data-testid={`card-zone-${item.id}`}
+              >
+                <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-green-500/10 bg-black/40">
+                  <img
+                    src={item.primaryImage!.url}
+                    alt={item.primaryTitle}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute top-2 right-2">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-green-500/80 text-black font-bold">
+                      ZONE
+                    </span>
+                  </div>
+                  <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-[10px] font-mono text-green-400">
+                      {item.genres?.slice(0, 2).join(" / ")}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs font-mono text-white mt-2 line-clamp-1">{item.primaryTitle}</p>
+                <p className="text-[10px] font-mono text-gray-500">{item.startYear} · {item.type === "tvSeries" ? "TV" : "Movie"}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -173,7 +257,7 @@ export default function Search() {
         </div>
       )}
 
-      {!isLoading && searchTerm && tmdbResults.length === 0 && mbResults.length === 0 && (
+      {!isLoading && searchTerm && tmdbResults.length === 0 && mbResults.length === 0 && imdbResults.length === 0 && (
         <div className="text-center py-20">
           <SearchIcon className="w-12 h-12 text-green-500/20 mx-auto mb-4" />
           <p className="text-gray-500 font-mono text-sm">No results found for "{searchTerm}"</p>
@@ -184,10 +268,11 @@ export default function Search() {
         <div className="text-center py-20">
           <div className="flex items-center justify-center gap-4 mb-4">
             <Film className="w-8 h-8 text-green-500/20" />
+            <Globe className="w-8 h-8 text-green-500/20" />
             <Tv className="w-8 h-8 text-green-500/20" />
           </div>
           <p className="text-gray-500 font-mono text-sm">Search for movies, TV shows, and more</p>
-          <p className="text-gray-600 font-mono text-xs mt-1">Results from TMDB and MovieBox</p>
+          <p className="text-gray-600 font-mono text-xs mt-1">Results from Zone Stream, TMDB, and MovieBox</p>
         </div>
       )}
     </div>
