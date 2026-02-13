@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, ChevronDown, Tv2 } from "lucide-react";
+import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, ChevronDown, Tv2, SkipBack, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
@@ -112,6 +112,12 @@ export default function Watch() {
   });
 
   const episodeCount = seasonData?.episodes?.length || 0;
+
+  useEffect(() => {
+    if (episodeCount > 0 && selectedEpisode > episodeCount) {
+      setSelectedEpisode(episodeCount);
+    }
+  }, [episodeCount, selectedEpisode]);
 
   const imdbId = useMemo(() => {
     if (isZone && id.startsWith("tt")) return id;
@@ -238,86 +244,6 @@ export default function Watch() {
             </div>
           </div>
 
-          {type === "tv" && seasonCount > 0 && (
-            <GlassPanel className="mb-6">
-              <h3 className="text-sm font-display font-bold text-white mb-4 flex items-center gap-2" data-testid="text-season-selector">
-                <Tv2 className="w-4 h-4 text-green-400" />
-                Seasons & Episodes
-              </h3>
-
-              <div className="mb-4">
-                <span className="text-xs font-mono text-gray-400 mr-3">Season:</span>
-                <div className="flex gap-1 flex-wrap mt-1">
-                  {Array.from({ length: seasonCount }, (_, i) => (
-                    <Button
-                      key={i}
-                      size="sm"
-                      variant={selectedSeason === (i + 1) ? "default" : "ghost"}
-                      onClick={() => { setSelectedSeason(i + 1); setSelectedEpisode(1); }}
-                      className={`font-mono text-xs ${selectedSeason === (i + 1) ? "bg-green-600 text-white" : "text-gray-400"}`}
-                      data-testid={`button-season-${i + 1}`}
-                    >
-                      S{i + 1}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {episodeCount > 0 && (
-                <div>
-                  <span className="text-xs font-mono text-gray-400 mb-1 block">
-                    Episodes ({episodeCount}):
-                  </span>
-                  <div className="grid gap-2 mt-2 max-h-[400px] overflow-y-auto pr-1">
-                    {seasonData!.episodes.map((ep) => (
-                      <button
-                        key={ep.episode_number}
-                        onClick={() => setSelectedEpisode(ep.episode_number)}
-                        className={`flex items-start gap-3 p-3 rounded-xl text-left transition-all ${
-                          selectedEpisode === ep.episode_number
-                            ? "bg-green-500/15 border border-green-500/30"
-                            : "bg-black/30 border border-green-500/5 hover:border-green-500/15"
-                        }`}
-                        data-testid={`button-episode-${ep.episode_number}`}
-                      >
-                        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-mono text-xs font-bold ${
-                          selectedEpisode === ep.episode_number
-                            ? "bg-green-500 text-black"
-                            : "bg-green-500/10 text-green-400"
-                        }`}>
-                          {ep.episode_number}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-mono font-medium truncate ${
-                            selectedEpisode === ep.episode_number ? "text-green-300" : "text-white"
-                          }`}>
-                            {ep.name || `Episode ${ep.episode_number}`}
-                          </p>
-                          {ep.overview && (
-                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{ep.overview}</p>
-                          )}
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {ep.runtime && (
-                              <span className="text-[10px] font-mono text-gray-600">{ep.runtime}m</span>
-                            )}
-                            {ep.air_date && (
-                              <span className="text-[10px] font-mono text-gray-600">{ep.air_date}</span>
-                            )}
-                          </div>
-                        </div>
-                        {selectedEpisode === ep.episode_number && (
-                          <div className="flex-shrink-0">
-                            <Play className="w-4 h-4 text-green-400 fill-green-400" />
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </GlassPanel>
-          )}
-
           <GlassPanel className="mb-8">
             <div className="flex items-center gap-4 mb-4">
               <h2 className="text-lg font-display font-bold text-white flex items-center gap-2" data-testid="text-stream-heading">
@@ -357,14 +283,52 @@ export default function Watch() {
             )}
 
             <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-b-xl border border-green-500/20 border-t-0 bg-black/60 backdrop-blur-sm">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="text-xs font-mono text-gray-400 truncate" data-testid="text-now-playing">
                   {title || "Now Playing"}
                   {type === "tv" && ` - S${selectedSeason}E${selectedEpisode}`}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
+                {type === "tv" && (
+                  <>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        if (selectedEpisode > 1) {
+                          setSelectedEpisode(selectedEpisode - 1);
+                        } else if (selectedSeason > 1) {
+                          setSelectedSeason(selectedSeason - 1);
+                          setSelectedEpisode(999);
+                        }
+                      }}
+                      disabled={selectedSeason === 1 && selectedEpisode === 1}
+                      className="text-green-400"
+                      data-testid="button-prev-episode"
+                    >
+                      <SkipBack className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        if (episodeCount > 0 && selectedEpisode < episodeCount) {
+                          setSelectedEpisode(selectedEpisode + 1);
+                        } else if (selectedSeason < seasonCount) {
+                          setSelectedSeason(selectedSeason + 1);
+                          setSelectedEpisode(1);
+                        }
+                      }}
+                      disabled={selectedSeason >= seasonCount && selectedEpisode >= episodeCount}
+                      className="text-green-400"
+                      data-testid="button-next-episode"
+                    >
+                      <SkipForward className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
@@ -396,6 +360,86 @@ export default function Watch() {
                 Downloads
               </h2>
               <DownloadSection title={title} />
+            </GlassPanel>
+          )}
+
+          {type === "tv" && seasonCount > 0 && (
+            <GlassPanel className="mb-8">
+              <h3 className="text-lg font-display font-bold text-white mb-4 flex items-center gap-2" data-testid="text-season-selector">
+                <Tv2 className="w-5 h-5 text-green-400" />
+                Seasons & Episodes
+              </h3>
+
+              <div className="mb-4">
+                <span className="text-xs font-mono text-gray-400 mr-3">Season:</span>
+                <div className="flex gap-1 flex-wrap mt-1">
+                  {Array.from({ length: seasonCount }, (_, i) => (
+                    <Button
+                      key={i}
+                      size="sm"
+                      variant={selectedSeason === (i + 1) ? "default" : "ghost"}
+                      onClick={() => { setSelectedSeason(i + 1); setSelectedEpisode(1); }}
+                      className={`font-mono text-xs ${selectedSeason === (i + 1) ? "bg-green-600 text-white" : "text-gray-400"}`}
+                      data-testid={`button-season-${i + 1}`}
+                    >
+                      S{i + 1}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {episodeCount > 0 && (
+                <div>
+                  <span className="text-xs font-mono text-gray-400 mb-1 block">
+                    Episodes ({episodeCount}):
+                  </span>
+                  <div className="grid gap-2 mt-2 max-h-[400px] overflow-y-auto pr-1">
+                    {seasonData!.episodes.map((ep) => (
+                      <button
+                        key={ep.episode_number}
+                        onClick={() => setSelectedEpisode(ep.episode_number)}
+                        className={`flex items-start gap-3 p-3 rounded-md text-left transition-all ${
+                          selectedEpisode === ep.episode_number
+                            ? "bg-green-500/15 border border-green-500/30"
+                            : "bg-black/30 border border-green-500/5 hover:border-green-500/15"
+                        }`}
+                        data-testid={`button-episode-${ep.episode_number}`}
+                      >
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center font-mono text-xs font-bold ${
+                          selectedEpisode === ep.episode_number
+                            ? "bg-green-500 text-black"
+                            : "bg-green-500/10 text-green-400"
+                        }`}>
+                          {ep.episode_number}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-mono font-medium truncate ${
+                            selectedEpisode === ep.episode_number ? "text-green-300" : "text-white"
+                          }`}>
+                            {ep.name || `Episode ${ep.episode_number}`}
+                          </p>
+                          {ep.overview && (
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{ep.overview}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {ep.runtime && (
+                              <span className="text-[10px] font-mono text-gray-600">{ep.runtime}m</span>
+                            )}
+                            {ep.air_date && (
+                              <span className="text-[10px] font-mono text-gray-600">{ep.air_date}</span>
+                            )}
+                          </div>
+                        </div>
+                        {selectedEpisode === ep.episode_number && (
+                          <div className="flex-shrink-0">
+                            <Play className="w-4 h-4 text-green-400 fill-green-400" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </GlassPanel>
           )}
         </div>
