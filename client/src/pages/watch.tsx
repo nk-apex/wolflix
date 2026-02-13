@@ -1,13 +1,11 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, SkipBack, SkipForward, ChevronDown, Tv2, Film, Server } from "lucide-react";
+import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, ChevronDown, Tv2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
-import { MovieBoxCard } from "@/components/moviebox-card";
 import { getImageUrl } from "@/lib/tmdb";
-import { type MovieBoxItem, getMovieBoxCover, getMovieBoxYear, getMovieBoxRating } from "@/lib/moviebox";
 
 interface TMDBDetail {
   id: number;
@@ -27,18 +25,7 @@ interface TMDBDetail {
   imdb_id?: string;
 }
 
-const EMBED_PLAYERS = {
-  vidsrc: (mediaType: string, id: string, s?: number, e?: number) =>
-    `https://vidsrc.icu/embed/${mediaType}/${id}${mediaType === "tv" && s && e ? `/${s}/${e}` : ""}`,
-  autoembed: (mediaType: string, id: string, s?: number, e?: number) =>
-    `https://player.autoembed.cc/embed/${mediaType}/${id}${mediaType === "tv" && s && e ? `/${s}/${e}` : ""}`,
-  twoembed: (mediaType: string, id: string, s?: number, e?: number) =>
-    `https://www.2embed.cc/embed/${id}${mediaType === "tv" && s && e ? `&s=${s}&e=${e}` : ""}`,
-  multiembed: (mediaType: string, id: string, s?: number, e?: number) =>
-    `https://multiembed.mov/?video_id=${id}&tmdb=1${mediaType === "tv" && s && e ? `&s=${s}&e=${e}` : ""}`,
-  superembed: (mediaType: string, id: string, s?: number, e?: number) =>
-    `https://getsuperembed.link/?video_id=${id}&tmdb=1${mediaType === "tv" && s && e ? `&s=${s}&e=${e}` : ""}`,
-};
+const BWM_BASE = "https://zone.bwmxmd.co.ke";
 
 export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
@@ -48,23 +35,12 @@ export default function Watch() {
 
   const urlParams = new URLSearchParams(window.location.search);
   const source = urlParams.get("source") || "tmdb";
-  const isMovieBox = source === "moviebox";
   const isZone = source === "zone";
-
-  const mbItemFromStorage = useMemo(() => {
-    if (!isMovieBox || !id) return null;
-    try {
-      const stored = sessionStorage.getItem(`mb_item_${id}`);
-      if (stored) return JSON.parse(stored) as MovieBoxItem;
-    } catch {}
-    return null;
-  }, [id, isMovieBox]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDownloads, setShowDownloads] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState(1);
-  const [selectedServer, setSelectedServer] = useState(0);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -72,8 +48,7 @@ export default function Watch() {
     setShowDownloads(false);
     setSelectedSeason(1);
     setSelectedEpisode(1);
-    setSelectedServer(0);
-  }, [id, isMovieBox]);
+  }, [id]);
 
   const toggleFullscreen = useCallback(() => {
     if (!playerContainerRef.current) return;
@@ -93,12 +68,12 @@ export default function Watch() {
   const tmdbEndpoint = type === "tv" ? `/api/tmdb/tv/${id}` : `/api/tmdb/movie/${id}`;
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBDetail>({
     queryKey: [tmdbEndpoint],
-    enabled: !!id && !isMovieBox,
+    enabled: !!id,
   });
 
   const { data: externalIds } = useQuery<{ imdb_id?: string }>({
     queryKey: [`/api/tmdb/${type}/${id}/external_ids`],
-    enabled: !!id && !isMovieBox && !isZone && type === "tv",
+    enabled: !!id && !isZone && type === "tv",
   });
 
   const imdbId = useMemo(() => {
@@ -108,195 +83,34 @@ export default function Watch() {
     return null;
   }, [type, tmdbData, externalIds, isZone, id]);
 
-  const { data: mbDetailRec } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
-    queryKey: ["/api/wolfmovieapi/detail", id],
-    enabled: !!id && isMovieBox,
-    queryFn: async () => {
-      const res = await fetch(`/api/wolfmovieapi/detail/${id}`);
-      if (!res.ok) throw new Error("Detail failed");
-      return res.json();
-    },
-  });
-
-  const mbItem = mbItemFromStorage;
-
-  const mbItemTitle = isMovieBox ? (mbItem?.title || "") : "";
-
-  const { data: mbSearchByTitle } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
-    queryKey: ["/api/wolfmovieapi/search-recover", id, mbItemTitle],
-    queryFn: async () => {
-      if (mbItemTitle) {
-        const res = await fetch(`/api/wolfmovieapi/search?keyword=${encodeURIComponent(mbItemTitle)}&page=1&perPage=5`);
-        if (!res.ok) throw new Error("Search failed");
-        return res.json();
-      }
-      const trendRes = await fetch(`/api/wolfmovieapi/trending?page=1&perPage=50`);
-      if (!trendRes.ok) throw new Error("Trending failed");
-      const trendData = await trendRes.json();
-      return { code: 0, data: { items: trendData?.data?.subjectList || [] } };
-    },
-    enabled: isMovieBox && !mbItem?.detailPath,
-  });
-
-  const recoveredMbItem = useMemo(() => {
-    if (mbItem?.detailPath) return null;
-    if (!mbSearchByTitle?.data?.items) return null;
-    return mbSearchByTitle.data.items.find(item => String(item.subjectId) === String(id)) || null;
-  }, [mbSearchByTitle, id, mbItem]);
-
-  const effectiveMbItem = mbItem || recoveredMbItem;
-
   const zoneTitle = urlParams.get("title") || "";
 
   const title = isZone
-    ? (zoneTitle || id)
-    : isMovieBox
-      ? (effectiveMbItem?.title || "")
-      : (tmdbData?.title || tmdbData?.name || "");
+    ? (zoneTitle || tmdbData?.title || tmdbData?.name || id)
+    : (tmdbData?.title || tmdbData?.name || "");
 
-  const detailPath = effectiveMbItem?.detailPath || "";
+  const playerUrl = useMemo(() => {
+    if (!imdbId) return "";
+    const mediaPath = type === "tv" ? "tv" : "movie";
+    return `${BWM_BASE}/${mediaPath}/${imdbId}`;
+  }, [imdbId, type]);
 
-  const { data: mbSearchForTmdb } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
-    queryKey: ["/api/wolfmovieapi/search-for-tmdb", title],
-    queryFn: async () => {
-      const res = await fetch(`/api/wolfmovieapi/search?keyword=${encodeURIComponent(title)}&page=1&perPage=10`);
-      if (!res.ok) throw new Error("Search failed");
-      return res.json();
-    },
-    enabled: !isMovieBox && !!title && title.length > 1,
-  });
+  const posterUrl = getImageUrl(tmdbData?.poster_path || null, "w500");
+  const backdropUrl = getImageUrl(tmdbData?.backdrop_path || null, "w1280");
+  const rating = tmdbData?.vote_average || 0;
+  const year = ((tmdbData?.release_date || tmdbData?.first_air_date)?.split("-")[0] || "");
+  const description = tmdbData?.overview || "";
+  const duration = tmdbData?.runtime || 0;
 
-  const tmdbMbMatch = useMemo(() => {
-    if (isMovieBox) return null;
-    if (!mbSearchForTmdb?.data?.items) return null;
-    const lowerTitle = title.toLowerCase();
-    return mbSearchForTmdb.data.items.find(r =>
-      r.title.toLowerCase() === lowerTitle
-    ) || mbSearchForTmdb.data.items[0] || null;
-  }, [mbSearchForTmdb, title, isMovieBox]);
+  const seasonCount = tmdbData?.number_of_seasons || 0;
 
-  const effectiveSubjectId = isMovieBox ? id : (tmdbMbMatch?.subjectId ? String(tmdbMbMatch.subjectId) : null);
-
-  const { data: streamDomainData } = useQuery<{ code: number; data: string }>({
-    queryKey: ["/api/wolfmovieapi/stream-domain"],
-    queryFn: async () => {
-      const res = await fetch("/api/wolfmovieapi/stream-domain");
-      if (!res.ok) throw new Error("Failed to fetch stream domain");
-      return res.json();
-    },
-    staleTime: 1000 * 60 * 30,
-  });
-
-  const streamDomain = streamDomainData?.data || "https://123movienow.cc";
-  const cleanStreamDomain = streamDomain.replace(/\/$/, "");
-
-  const movieBoxPlayerUrl = useMemo(() => {
-    if (!effectiveSubjectId) return "";
-    const se = type === "tv" ? selectedSeason : 0;
-    const ep = type === "tv" ? selectedEpisode : 0;
-    return `${cleanStreamDomain}/spa/videoPlayPage/movies/${effectiveSubjectId}?se=${se}&ep=${ep}`;
-  }, [effectiveSubjectId, type, selectedSeason, selectedEpisode, cleanStreamDomain]);
-
-  const tmdbId = isMovieBox ? null : (isZone ? null : id);
-  const mediaType = type === "tv" ? "tv" : "movie";
-  const s = type === "tv" ? selectedSeason : undefined;
-  const e = type === "tv" ? selectedEpisode : undefined;
-
-  const allServers = useMemo(() => {
-    const servers: { name: string; url: string; source: string }[] = [];
-
-    if (imdbId) {
-      servers.push({ name: "VidSrc", url: EMBED_PLAYERS.vidsrc(mediaType, imdbId, s, e), source: "embed" });
-      servers.push({ name: "AutoEmbed", url: EMBED_PLAYERS.autoembed(mediaType, imdbId, s, e), source: "embed" });
-      servers.push({ name: "2Embed", url: EMBED_PLAYERS.twoembed(mediaType, imdbId, s, e), source: "embed" });
-    }
-
-    if (tmdbId) {
-      servers.push({ name: "VidSrc (TMDB)", url: EMBED_PLAYERS.vidsrc(mediaType, tmdbId, s, e), source: "embed" });
-      servers.push({ name: "MultiEmbed", url: EMBED_PLAYERS.multiembed(mediaType, tmdbId, s, e), source: "embed" });
-      servers.push({ name: "SuperEmbed", url: EMBED_PLAYERS.superembed(mediaType, tmdbId, s, e), source: "embed" });
-    }
-
-    if (movieBoxPlayerUrl) {
-      servers.push({ name: "MovieBox", url: movieBoxPlayerUrl, source: "moviebox" });
-    }
-
-    return servers;
-  }, [imdbId, tmdbId, mediaType, s, e, movieBoxPlayerUrl]);
-
-  const activeServerUrl = allServers[selectedServer]?.url || "";
-
-  const posterUrl = isMovieBox
-    ? (effectiveMbItem ? getMovieBoxCover(effectiveMbItem) : "")
-    : getImageUrl(tmdbData?.poster_path || null, "w500");
-
-  const backdropUrl = isMovieBox
-    ? (effectiveMbItem?.stills?.[0]?.url || "")
-    : getImageUrl(tmdbData?.backdrop_path || null, "w1280");
-
-  const rating = isMovieBox
-    ? (effectiveMbItem ? parseFloat(getMovieBoxRating(effectiveMbItem)) : 0)
-    : (tmdbData?.vote_average || 0);
-
-  const year = isMovieBox
-    ? (effectiveMbItem ? getMovieBoxYear(effectiveMbItem) : "")
-    : ((tmdbData?.release_date || tmdbData?.first_air_date)?.split("-")[0] || "");
-
-  const genre = isMovieBox
-    ? (effectiveMbItem?.genre || "")
-    : "";
-
-  const description = isMovieBox
-    ? (effectiveMbItem?.description || "")
-    : (tmdbData?.overview || "");
-
-  const duration = isMovieBox
-    ? (effectiveMbItem?.duration ? Math.round(effectiveMbItem.duration / 60) : 0)
-    : (tmdbData?.runtime || 0);
-
-  const country = isMovieBox ? (effectiveMbItem?.countryName || "") : "";
-
-  const mbRelated = mbDetailRec?.data?.items || [];
-
-  const seasonCount = useMemo(() => {
-    if (isMovieBox && effectiveMbItem?.season) {
-      const s = effectiveMbItem.season;
-      if (Array.isArray(s)) return s.length;
-      if (typeof s === "number") return s;
-    }
-    if (!isMovieBox && tmdbData?.number_of_seasons) {
-      return tmdbData.number_of_seasons;
-    }
-    if (tmdbMbMatch?.season) {
-      const s = tmdbMbMatch.season;
-      if (typeof s === "number") return s;
-      if (Array.isArray(s)) return s.length;
-    }
-    return 0;
-  }, [isMovieBox, effectiveMbItem, tmdbData, tmdbMbMatch]);
-
-  const navigateRelated = (direction: "prev" | "next") => {
-    if (mbRelated.length === 0) return;
-    const currentIdx = mbRelated.findIndex(r => String(r.subjectId) === String(id));
-    let targetIdx = direction === "next" ? currentIdx + 1 : currentIdx - 1;
-    if (targetIdx < 0) targetIdx = mbRelated.length - 1;
-    if (targetIdx >= mbRelated.length) targetIdx = 0;
-    const target = mbRelated[targetIdx];
-    const mediaType = target.subjectType === 2 ? "tv" : "movie";
-    sessionStorage.setItem(`mb_item_${target.subjectId}`, JSON.stringify(target));
-    navigate(`/watch/${mediaType}/${target.subjectId}?source=moviebox`);
-  };
-
-  if (tmdbLoading && !isMovieBox) {
+  if (tmdbLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
       </div>
     );
   }
-
-  const isSearching = !isMovieBox && !isZone && !tmdbMbMatch && !!title;
-  const hasServers = allServers.length > 0;
 
   return (
     <div className="min-h-screen bg-black">
@@ -351,39 +165,18 @@ export default function Watch() {
                     {duration} min
                   </span>
                 )}
-                {!isMovieBox && tmdbData?.status && (
+                {tmdbData?.status && (
                   <Badge variant="outline" className="text-green-400 border-green-500/20 bg-green-500/10 font-mono" data-testid="text-status">
                     {tmdbData.status}
                   </Badge>
                 )}
-                {isMovieBox && (
-                  <Badge variant="outline" className="text-emerald-400 border-emerald-500/20 bg-emerald-500/10 font-mono" data-testid="badge-source-moviebox">
-                    <Film className="w-3 h-3 mr-1" />
-                    MovieBox
-                  </Badge>
-                )}
-                {country && (
-                  <Badge variant="outline" className="text-gray-300 border-gray-500/20 bg-gray-500/10 font-mono" data-testid="badge-country">
-                    {country}
-                  </Badge>
-                )}
               </div>
 
-              {!isMovieBox && tmdbData?.genres && tmdbData.genres.length > 0 && (
+              {tmdbData?.genres && tmdbData.genres.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4">
                   {tmdbData.genres.map((g) => (
                     <Badge key={g.id} variant="outline" className="text-green-300 border-green-500/15 bg-green-500/10 font-mono" data-testid={`badge-genre-${g.id}`}>
                       {g.name}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              {isMovieBox && genre && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {genre.split(",").map((g) => (
-                    <Badge key={g.trim()} variant="outline" className="text-green-300 border-green-500/15 bg-green-500/10 font-mono" data-testid={`badge-genre-mb-${g.trim()}`}>
-                      {g.trim()}
                     </Badge>
                   ))}
                 </div>
@@ -395,26 +188,10 @@ export default function Watch() {
                 </p>
               )}
 
-              {!isMovieBox && tmdbData?.number_of_seasons && (
+              {tmdbData?.number_of_seasons && (
                 <p className="text-xs font-mono text-gray-500 mb-4" data-testid="text-seasons">
                   {tmdbData.number_of_seasons} Seasons / {tmdbData.number_of_episodes} Episodes
                 </p>
-              )}
-
-              {isMovieBox && seasonCount > 0 && (
-                <p className="text-xs font-mono text-gray-500 mb-4" data-testid="text-seasons-mb">
-                  {seasonCount} Season{seasonCount > 1 ? "s" : ""}
-                </p>
-              )}
-
-              {isMovieBox && effectiveMbItem?.staffList && effectiveMbItem.staffList.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                  {effectiveMbItem.staffList.slice(0, 5).map((staff) => (
-                    <span key={staff.staffId} className="text-xs font-mono text-gray-500">
-                      {staff.staffName} ({staff.staffRole})
-                    </span>
-                  ))}
-                </div>
               )}
             </div>
           </div>
@@ -469,57 +246,28 @@ export default function Watch() {
               <h2 className="text-lg font-display font-bold text-white flex items-center gap-2" data-testid="text-stream-heading">
                 <Play className="w-5 h-5 text-green-400" />
                 Stream Now
-                {allServers[selectedServer] && (
-                  <Badge variant="outline" className="text-green-400 border-green-500/20 bg-green-500/10 font-mono ml-2">
-                    {allServers[selectedServer].name}
-                  </Badge>
-                )}
+                <Badge variant="outline" className="text-green-400 border-green-500/20 bg-green-500/10 font-mono ml-2">
+                  BWM Player
+                </Badge>
               </h2>
-              {allServers.length > 1 && (
-                <div className="flex items-center gap-1 flex-wrap">
-                  {allServers.map((server, i) => (
-                    <Button
-                      key={i}
-                      size="sm"
-                      variant={selectedServer === i ? "default" : "ghost"}
-                      onClick={() => setSelectedServer(i)}
-                      className={`font-mono text-xs ${selectedServer === i ? "bg-green-600 text-white" : "text-gray-400"}`}
-                      data-testid={`button-server-${i}`}
-                    >
-                      {server.source === "moviebox" ? <Film className="w-3 h-3 mr-1" /> : <Server className="w-3 h-3 mr-1" />}
-                      {server.name}
-                    </Button>
-                  ))}
-                </div>
-              )}
             </div>
 
-            {isSearching ? (
-              <div className="w-full aspect-video rounded-t-xl border border-green-500/20 border-b-0 bg-black flex items-center justify-center">
-                <div className="text-center">
-                  <Loader2 className="w-10 h-10 text-green-500/30 mx-auto mb-3 animate-spin" />
-                  <p className="text-sm font-mono text-gray-500" data-testid="text-loading-stream">
-                    Finding streaming sources...
-                  </p>
-                  <p className="text-xs font-mono text-gray-600 mt-1">Connecting to stream servers</p>
-                </div>
-              </div>
-            ) : !hasServers ? (
+            {!playerUrl ? (
               <div className="w-full aspect-video rounded-t-xl border border-green-500/20 border-b-0 bg-black flex items-center justify-center">
                 <div className="text-center">
                   <Search className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
                   <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
                     No streaming source found for this title
                   </p>
-                  <p className="text-xs font-mono text-gray-600 mt-1">Try searching for a different title</p>
+                  <p className="text-xs font-mono text-gray-600 mt-1">IMDB ID not available for this content</p>
                 </div>
               </div>
             ) : (
               <div ref={playerContainerRef} className="relative w-full aspect-video rounded-t-xl overflow-hidden border border-green-500/20 border-b-0 bg-black">
                 <iframe
                   ref={iframeRef}
-                  key={activeServerUrl}
-                  src={activeServerUrl}
+                  key={playerUrl}
+                  src={playerUrl}
                   className="absolute inset-0 w-full h-full"
                   allowFullScreen
                   allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
@@ -531,33 +279,9 @@ export default function Watch() {
             )}
 
             <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-b-xl border border-green-500/20 border-t-0 bg-black/60 backdrop-blur-sm">
-              <div className="flex items-center gap-2">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => navigateRelated("prev")}
-                  className="text-gray-400"
-                  disabled={mbRelated.length === 0}
-                  data-testid="button-prev"
-                >
-                  <SkipBack className="w-4 h-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => navigateRelated("next")}
-                  className="text-gray-400"
-                  disabled={mbRelated.length === 0}
-                  data-testid="button-next"
-                >
-                  <SkipForward className="w-4 h-4" />
-                </Button>
-              </div>
-
-              <div className="flex-1 text-center">
+              <div className="flex-1">
                 <p className="text-xs font-mono text-gray-400 truncate" data-testid="text-now-playing">
-                  {title || "Now Playing"}
-                  {allServers[selectedServer] && ` - ${allServers[selectedServer].name}`}
+                  {title || "Now Playing"} - BWM Stream
                 </p>
               </div>
 
@@ -592,21 +316,7 @@ export default function Watch() {
                 <Download className="w-5 h-5 text-green-400" />
                 Downloads
               </h2>
-              <DownloadSection title={title} effectiveSubjectId={effectiveSubjectId} />
-            </GlassPanel>
-          )}
-
-          {mbRelated.length > 0 && (
-            <GlassPanel className="mb-8">
-              <h2 className="text-lg font-display font-bold text-white flex items-center gap-2 mb-4" data-testid="text-related-heading">
-                <Film className="w-5 h-5 text-green-400" />
-                Related Content
-              </h2>
-              <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-                {mbRelated.map((item: MovieBoxItem) => (
-                  <MovieBoxCard key={item.subjectId} item={item} />
-                ))}
-              </div>
+              <DownloadSection title={title} />
             </GlassPanel>
           )}
         </div>
@@ -615,7 +325,7 @@ export default function Watch() {
   );
 }
 
-function DownloadSection({ title, effectiveSubjectId }: { title: string; effectiveSubjectId: string | null }) {
+function DownloadSection({ title }: { title: string }) {
   const { data: arslanSearch, isLoading: arslanLoading } = useQuery<{ results?: { title: string; url: string }[] }>({
     queryKey: ["/api/arslan/search", title],
     queryFn: async () => {

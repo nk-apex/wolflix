@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Search as SearchIcon, X, Film, Tv, Zap, Globe } from "lucide-react";
+import { Search as SearchIcon, X, Film, Tv, Globe } from "lucide-react";
 import { ContentCard } from "@/components/content-card";
-import { MovieBoxCard } from "@/components/moviebox-card";
 import { type TMDBMovie } from "@/lib/tmdb";
-import { type MovieBoxSearchResponse, type MovieBoxItem } from "@/lib/moviebox";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface TMDBRes { results: TMDBMovie[] }
@@ -36,7 +34,7 @@ export default function Search() {
       setSearchTerm(currentQ);
     }
   }, [location]);
-  const [activeTab, setActiveTab] = useState<"all" | "tmdb" | "moviebox" | "zone">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "tmdb" | "zone">("all");
 
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBRes>({
     queryKey: ["/api/tmdb/search", searchTerm],
@@ -44,16 +42,6 @@ export default function Search() {
     queryFn: async () => {
       const res = await fetch(`/api/tmdb/search/${encodeURIComponent(searchTerm)}`);
       if (!res.ok) throw new Error("Search failed");
-      return res.json();
-    },
-  });
-
-  const { data: mbData, isLoading: mbLoading } = useQuery<MovieBoxSearchResponse>({
-    queryKey: ["/api/wolfmovieapi/search", searchTerm],
-    enabled: searchTerm.length > 1,
-    queryFn: async () => {
-      const res = await fetch(`/api/wolfmovieapi/search?keyword=${encodeURIComponent(searchTerm)}&page=1&perPage=30`);
-      if (!res.ok) throw new Error("MovieBox search failed");
       return res.json();
     },
   });
@@ -74,12 +62,10 @@ export default function Search() {
   };
 
   const tmdbResults = tmdbData?.results || [];
-  const mbResults = mbData?.data?.items || [];
   const imdbResults = imdbData?.titles || [];
-  const isLoading = tmdbLoading || mbLoading || imdbLoading;
+  const isLoading = tmdbLoading || imdbLoading;
 
   const showTmdb = activeTab === "all" || activeTab === "tmdb";
-  const showMb = activeTab === "all" || activeTab === "moviebox";
   const showZone = activeTab === "all" || activeTab === "zone";
 
   const handleZoneClick = (item: IMDBTitle) => {
@@ -140,7 +126,7 @@ export default function Search() {
             }`}
             data-testid="button-tab-zone"
           >
-            Zone ({imdbResults.length})
+            BWM ({imdbResults.length})
           </button>
           <button
             onClick={() => setActiveTab("tmdb")}
@@ -152,17 +138,6 @@ export default function Search() {
             data-testid="button-tab-tmdb"
           >
             TMDB ({tmdbResults.length})
-          </button>
-          <button
-            onClick={() => setActiveTab("moviebox")}
-            className={`px-4 py-1.5 rounded-full text-xs font-mono transition-all ${
-              activeTab === "moviebox"
-                ? "bg-green-500 text-black font-bold"
-                : "bg-green-500/10 text-green-400 border border-green-500/20"
-            }`}
-            data-testid="button-tab-moviebox"
-          >
-            MovieBox ({mbResults.length})
           </button>
         </div>
       )}
@@ -183,7 +158,7 @@ export default function Search() {
           {activeTab === "all" && (
             <div className="flex items-center gap-2 mb-4">
               <Globe className="w-4 h-4 text-green-400" />
-              <h3 className="text-sm font-mono font-bold text-gray-400 uppercase tracking-wider">Zone Stream Results</h3>
+              <h3 className="text-sm font-mono font-bold text-gray-400 uppercase tracking-wider">BWM Stream Results</h3>
             </div>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -204,7 +179,7 @@ export default function Search() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="absolute top-2 right-2">
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-green-500/80 text-black font-bold">
-                      ZONE
+                      BWM
                     </span>
                   </div>
                   <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -241,23 +216,7 @@ export default function Search() {
         </div>
       )}
 
-      {!isLoading && searchTerm && showMb && mbResults.length > 0 && (
-        <div className="mb-8">
-          {activeTab === "all" && (
-            <div className="flex items-center gap-2 mb-4">
-              <Zap className="w-4 h-4 text-green-400" />
-              <h3 className="text-sm font-mono font-bold text-gray-400 uppercase tracking-wider">MovieBox Results</h3>
-            </div>
-          )}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {mbResults.filter((r: MovieBoxItem) => r.cover?.url).map((item: MovieBoxItem, idx: number) => (
-              <MovieBoxCard key={`${item.subjectId}-${idx}`} item={item} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {!isLoading && searchTerm && tmdbResults.length === 0 && mbResults.length === 0 && imdbResults.length === 0 && (
+      {!isLoading && searchTerm && tmdbResults.length === 0 && imdbResults.length === 0 && (
         <div className="text-center py-20">
           <SearchIcon className="w-12 h-12 text-green-500/20 mx-auto mb-4" />
           <p className="text-gray-500 font-mono text-sm">No results found for "{searchTerm}"</p>
@@ -272,7 +231,7 @@ export default function Search() {
             <Tv className="w-8 h-8 text-green-500/20" />
           </div>
           <p className="text-gray-500 font-mono text-sm">Search for movies, TV shows, and more</p>
-          <p className="text-gray-600 font-mono text-xs mt-1">Results from Zone Stream, TMDB, and MovieBox</p>
+          <p className="text-gray-600 font-mono text-xs mt-1">Results from BWM Stream and TMDB</p>
         </div>
       )}
     </div>

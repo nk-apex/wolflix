@@ -1,17 +1,18 @@
 # WOLFLIX - Streaming Platform
 
 ## Overview
-WOLFLIX is a streaming platform built with React + Vite on the frontend and Express on the backend. It uses the TMDB API and MovieBox (wolfmovieapi) to display movies, TV shows, animation, and more. The app features a dark theme with neon green (#00ff00) accents and glass-morphism card effects.
+WOLFLIX is a streaming platform built with React + Vite on the frontend and Express on the backend. It uses the TMDB API for movie/TV metadata and BWM (zone.bwmxmd.co.ke) as the sole streaming source via iframe embedding. Search uses the IMDB API (api.imdbapi.dev) for BWM-compatible results. The app features a dark theme with neon green (#00ff00) accents and glass-morphism card effects.
 
 ## Architecture
 - **Frontend**: React + TypeScript + Vite, TailwindCSS, Shadcn UI
-- **Backend**: Express.js proxying TMDB API and MovieBox API requests
+- **Backend**: Express.js proxying TMDB API, IMDB API, and Arslan API requests
+- **Streaming**: BWM player (zone.bwmxmd.co.ke) embedded via iframe using IMDB IDs
 - **Styling**: Dark mode with neon green accents, glass card effects, font-display (Oxanium), font-mono
 - **Routing**: wouter for client-side routing
 - **Data Fetching**: @tanstack/react-query
 
 ## Pages
-- `/` - Welcome (dashboard with hero, stats, featured content, MovieBox trending + categories)
+- `/` - Welcome (dashboard with hero, stats, featured TMDB trending content)
 - `/movies` - Movies by genre (trending, action, sci-fi, horror, drama, comedy)
 - `/tv-shows` - TV Shows by genre
 - `/series` - Series collections (trending, top rated, popular, airing today)
@@ -19,22 +20,12 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `/novel` - Book adaptations, literary classics, fantasy
 - `/most-viewed` - Top 10 trending, popular, all-time favorites
 - `/application` - Download apps info
-- `/search` - Search movies & TV shows (dual TMDB + MovieBox results with tabs)
+- `/search` - Search movies & TV shows (tabs: All, BWM/IMDB results, TMDB results)
 - `/settings` - User preferences
 - `/profile` - User profile
-- `/watch/:type/:id` - Watch page with embedded player, movie details, download links, and related MovieBox content
+- `/watch/:type/:id` - Watch page with BWM iframe player, movie details, download links
 
 ## API Routes
-### WolfMovieAPI (MovieBox powered) - `/api/wolfmovieapi/`
-- `home` - Home page content with categories (operatingList)
-- `search?keyword=&page=&perPage=&type=` - Search movies/TV (POST to MovieBox)
-- `search-suggest?keyword=` - Search suggestions
-- `trending?page=&perPage=&tabId=` - Trending content
-- `filter?type=&page=&perPage=&genre=&country=&year=&sort=` - Filter content (type: 1=movie, 2=series)
-- `detail/:subjectId?page=` - Related content for a subject
-- `stream-domain` - Get streaming domain URL (currently 123movienow.cc)
-- `everyone-search` - Popular search terms
-
 ### TMDB API (content browsing) - `/api/tmdb/`
 - `trending` - Trending all
 - `movies/trending`, `movies/popular`, `movies/top_rated`, `movies/genre/:id`
@@ -42,43 +33,34 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `animation/movies`, `animation/anime`, `animation/tv`, `animation/family`
 - `novel/adaptations`, `novel/classics`, `novel/fantasy`, `novel/series`
 - `search/:query` - Multi search
-- `movie/:id`, `tv/:id` - Individual movie/TV detail
+- `movie/:id`, `tv/:id` - Individual movie/TV detail (accepts both TMDB and IMDB IDs)
+- `movie/:id/external_ids`, `tv/:id/external_ids` - Get external IDs (IMDB etc.)
 
-### Arslan API (streaming/downloads) - `/api/arslan/`
-- `search?text=` - Search for movies with download links (pirate source)
+### IMDB API (BWM search) - `/api/imdb/`
+- `search?q=` - Search titles via api.imdbapi.dev (no auth required)
+
+### Arslan API (downloads) - `/api/arslan/`
+- `search?text=` - Search for movies with download links
 - `movie?url=` - Get movie details + download links
 - `sinhalasub/search?text=`, `sinhalasub/movie?url=`, `sinhalasub/tvshow?url=`, `sinhalasub/episode?url=` - Sinhalasub sources
 
+### WolfMovieAPI (MovieBox - legacy, still available) - `/api/wolfmovieapi/`
+- Routes still exist in server but are no longer used by the frontend
+
 ## Streaming
-- Clicking any content card navigates to `/watch/:type/:id`
-- **Embed Players** (primary streaming - work with both IMDB and TMDB IDs):
-  - VidSrc (`vidsrc.icu/embed/{movie|tv}/{id}`) - supports IMDB IDs
-  - AutoEmbed (`player.autoembed.cc/embed/{movie|tv}/{id}`) - supports IMDB IDs
-  - 2Embed (`www.2embed.cc/embed/{id}`) - supports IMDB IDs
-  - VidSrc TMDB (`vidsrc.icu/embed/{movie|tv}/{tmdb_id}`) - TMDB ID variant
-  - MultiEmbed (`multiembed.mov/?video_id={tmdb_id}&tmdb=1`)
-  - SuperEmbed (`getsuperembed.link/?video_id={tmdb_id}&tmdb=1`)
-- **MovieBox Native Player** (fallback):
-  - URL format: `{streamDomain}/spa/videoPlayPage/movies/{subjectId}?se={season}&ep={episode}`
-  - Streaming domain fetched dynamically from MovieBox API (`/media-player/get-domain`)
-- TMDB API accepts both TMDB IDs and IMDB IDs for movie/TV detail endpoints
-- Zone search results use IMDB IDs which resolve to full TMDB details automatically
-- For TMDB items: Shows IMDB-based embeds (if imdb_id available) + TMDB-based embeds + MovieBox
-- For Zone items: Shows IMDB-based embeds + TMDB-based embeds (TMDB resolves IMDB IDs)
-- MovieBox items navigate with `?source=moviebox` and store item data in sessionStorage
-- Zone items navigate with `?source=zone` and pass IMDB ID as the route id
-- Fullscreen toggle button on the player using browser Fullscreen API
+- **BWM Player** (sole streaming source):
+  - URL pattern: `https://zone.bwmxmd.co.ke/{movie|tv}/{imdb_id}`
+  - Embedded via iframe in the watch page
+  - Requires IMDB ID for content identification
+- Content navigation:
+  - TMDB items: Navigate to `/watch/{type}/{tmdb_id}`, system looks up IMDB ID from TMDB data
+  - BWM/Zone items: Navigate to `/watch/{type}/{imdb_id}?source=zone&title={title}`, IMDB ID used directly
+  - TMDB API resolves IMDB IDs automatically (e.g., `/api/tmdb/movie/tt1234567` works)
+- For TV shows: External IDs endpoint fetches IMDB ID since it's not in the main TV detail response
+- Season/episode selector available for TV content (up to 20 episodes shown)
+- Fullscreen toggle using browser Fullscreen API
 - Download links fetched from Arslan API by searching movie title
 - HTML entity decoding for download URLs using textarea helper
-- Multiple download sources with quality/size info
-
-## MovieBox Integration (wolfmovieapi)
-- Server-side token management with automatic refresh (1 hour expiry)
-- Token obtained from `/web/get-page-tdk` endpoint
-- API base: `https://h5-api.aoneroom.com/wefeed-h5api-bff/`
-- Streaming domain: dynamically fetched from `/media-player/get-domain`
-- Uses POST for search/filter, GET for trending/home/detail
-- Required headers: X-Client-Token, X-Request-Lang, User-Agent
 
 ## Environment Variables
 - `TMDB_API_KEY` - TMDB API key for fetching movie/TV data
@@ -86,7 +68,5 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 ## Key Components
 - `GlassCard` / `GlassPanel` - Glass-morphism card components
 - `ContentCard` - TMDB movie/TV show poster card, navigates to Watch page
-- `MovieBoxCard` - MovieBox content card with cover images from MovieBox CDN
 - `ContentRow` - Horizontally scrollable content row (TMDB items)
-- `MovieBoxRow` - Horizontally scrollable content row (MovieBox items)
 - `AppSidebar` - Navigation sidebar using Shadcn sidebar primitives

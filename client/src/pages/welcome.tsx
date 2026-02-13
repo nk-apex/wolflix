@@ -4,8 +4,6 @@ import { GlassCard, GlassPanel } from "@/components/glass-card";
 import { useQuery } from "@tanstack/react-query";
 import { type TMDBMovie, getImageUrl, getRating, getYear } from "@/lib/tmdb";
 import { ContentCard } from "@/components/content-card";
-import { MovieBoxRow } from "@/components/moviebox-row";
-import { type MovieBoxItem, type MovieBoxHomeResponse, type MovieBoxTrendingResponse } from "@/lib/moviebox";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -32,23 +30,9 @@ export default function Welcome() {
     queryKey: ["/api/tmdb/trending"],
   });
 
-  const { data: mbTrending, isLoading: mbTrendingLoading } = useQuery<MovieBoxTrendingResponse>({
-    queryKey: ["/api/wolfmovieapi/trending"],
-  });
-
-  const { data: mbHome, isLoading: mbHomeLoading } = useQuery<MovieBoxHomeResponse>({
-    queryKey: ["/api/wolfmovieapi/home"],
-  });
-
   const heroItems = trending?.results?.slice(0, 8) || [];
   const trendingItems = trending?.results?.slice(0, 12) || [];
   const featured = heroItems[heroIndex];
-
-  const mbTrendingItems = mbTrending?.data?.subjectList || [];
-
-  const homeCategories = (mbHome?.data?.operatingList || [])
-    .filter(m => m.type === "SUBJECTS_MOVIE" && m.subjects && m.subjects.length > 0)
-    .slice(0, 4);
 
   const nextHero = useCallback(() => {
     if (heroItems.length === 0) return;
@@ -247,22 +231,6 @@ export default function Welcome() {
           </div>
         </div>
 
-        <MovieBoxRow
-          title="MovieBox Trending"
-          icon={<Zap className="w-5 h-5" />}
-          items={mbTrendingItems}
-          isLoading={mbTrendingLoading}
-        />
-
-        {homeCategories.map((cat) => (
-          <MovieBoxRow
-            key={cat.title}
-            title={cat.title}
-            icon={<Film className="w-5 h-5" />}
-            items={cat.subjects}
-            isLoading={mbHomeLoading}
-          />
-        ))}
       </div>
     </div>
   );
