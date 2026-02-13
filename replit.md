@@ -48,13 +48,16 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - Routes still exist in server but are no longer used by the frontend
 
 ## Streaming
-- **BWM Player** (sole streaming source):
-  - URL pattern: `https://zone.bwmxmd.co.ke/{movie|tv}/{imdb_id}`
-  - Embedded via iframe in the watch page
-  - Requires IMDB ID for content identification
+- **Embed Player Services** (multiple servers with server selector):
+  - Server 1 (AutoEmbed): `player.autoembed.cc/embed/{movie|tv}/{imdb_id}` - supports IMDB IDs
+  - Server 2 (MultiEmbed): `multiembed.mov/?video_id={imdb_id}` - supports IMDB IDs
+  - Server 3 (VidSrc): `vidsrc.icu/embed/{movie|tv}/{imdb_id}` - supports IMDB IDs
+  - Server 4 (MultiEmbed TMDB): `multiembed.mov/?video_id={tmdb_id}&tmdb=1` - uses TMDB IDs
+  - All servers embedded via iframe in the watch page
+  - Users can switch between servers if one doesn't work
 - Content navigation:
   - TMDB items: Navigate to `/watch/{type}/{tmdb_id}`, system looks up IMDB ID from TMDB data
-  - BWM/Zone items: Navigate to `/watch/{type}/{imdb_id}?source=zone&title={title}`, IMDB ID used directly
+  - BWM/Zone search items: Navigate to `/watch/{type}/{imdb_id}?source=zone&title={title}`, IMDB ID used directly
   - TMDB API resolves IMDB IDs automatically (e.g., `/api/tmdb/movie/tt1234567` works)
 - For TV shows: External IDs endpoint fetches IMDB ID since it's not in the main TV detail response
 - Season/episode selector available for TV content (up to 20 episodes shown)
