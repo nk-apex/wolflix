@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, ChevronDown, Tv2, Server } from "lucide-react";
+import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, ChevronDown, Tv2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
@@ -25,41 +25,13 @@ interface TMDBDetail {
   imdb_id?: string;
 }
 
-interface EmbedServer {
-  name: string;
-  label: string;
-  getMovieUrl: (id: string) => string;
-  getTvUrl: (id: string, season: number, episode: number) => string;
-  useTmdbId?: boolean;
+function getPlayerUrl(contentId: string, contentType: string, season?: number, episode?: number): string {
+  if (!contentId) return "";
+  if (contentType === "tv") {
+    return `https://player.autoembed.cc/embed/tv/${contentId}/${season || 1}/${episode || 1}`;
+  }
+  return `https://player.autoembed.cc/embed/movie/${contentId}`;
 }
-
-const EMBED_SERVERS: EmbedServer[] = [
-  {
-    name: "autoembed",
-    label: "Server 1",
-    getMovieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}`,
-    getTvUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`,
-  },
-  {
-    name: "multiembed",
-    label: "Server 2",
-    getMovieUrl: (id) => `https://multiembed.mov/?video_id=${id}`,
-    getTvUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&s=${s}&e=${e}`,
-  },
-  {
-    name: "vidsrc",
-    label: "Server 3",
-    getMovieUrl: (id) => `https://vidsrc.icu/embed/movie/${id}`,
-    getTvUrl: (id, s, e) => `https://vidsrc.icu/embed/tv/${id}/${s}/${e}`,
-  },
-  {
-    name: "multiembed-tmdb",
-    label: "Server 4",
-    getMovieUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
-    getTvUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
-    useTmdbId: true,
-  },
-];
 
 export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
@@ -75,7 +47,6 @@ export default function Watch() {
   const [showDownloads, setShowDownloads] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState(1);
-  const [activeServer, setActiveServer] = useState(0);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -83,7 +54,6 @@ export default function Watch() {
     setShowDownloads(false);
     setSelectedSeason(1);
     setSelectedEpisode(1);
-    setActiveServer(0);
   }, [id]);
 
   const toggleFullscreen = useCallback(() => {
@@ -131,26 +101,10 @@ export default function Watch() {
     ? (zoneTitle || tmdbData?.title || tmdbData?.name || id)
     : (tmdbData?.title || tmdbData?.name || "");
 
-  const effectiveServer = useMemo(() => {
-    const server = EMBED_SERVERS[activeServer];
-    if (server.useTmdbId && tmdbId) return activeServer;
-    if (!server.useTmdbId && imdbId) return activeServer;
-    if (!imdbId && tmdbId) {
-      const tmdbServerIdx = EMBED_SERVERS.findIndex(s => s.useTmdbId);
-      if (tmdbServerIdx >= 0) return tmdbServerIdx;
-    }
-    return activeServer;
-  }, [activeServer, imdbId, tmdbId]);
-
-  const currentServer = EMBED_SERVERS[effectiveServer];
+  const contentId = imdbId || tmdbId || "";
   const playerUrl = useMemo(() => {
-    const contentId = currentServer.useTmdbId ? tmdbId : imdbId;
-    if (!contentId) return "";
-    if (type === "tv") {
-      return currentServer.getTvUrl(contentId, selectedSeason, selectedEpisode);
-    }
-    return currentServer.getMovieUrl(contentId);
-  }, [imdbId, tmdbId, type, currentServer, selectedSeason, selectedEpisode]);
+    return getPlayerUrl(contentId, type, selectedSeason, selectedEpisode);
+  }, [contentId, type, selectedSeason, selectedEpisode]);
 
   const posterUrl = getImageUrl(tmdbData?.poster_path || null, "w500");
   const backdropUrl = getImageUrl(tmdbData?.backdrop_path || null, "w1280");
@@ -299,31 +253,11 @@ export default function Watch() {
           )}
 
           <GlassPanel className="mb-8">
-            <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+            <div className="flex items-center gap-4 mb-4">
               <h2 className="text-lg font-display font-bold text-white flex items-center gap-2" data-testid="text-stream-heading">
                 <Play className="w-5 h-5 text-green-400" />
                 Stream Now
               </h2>
-              <div className="flex items-center gap-1 flex-wrap" data-testid="server-selector">
-                <Server className="w-3.5 h-3.5 text-gray-500 mr-1" />
-                {EMBED_SERVERS.map((server, i) => {
-                  const isActive = effectiveServer === i;
-                  const isDisabled = !server.useTmdbId && !imdbId && !tmdbId;
-                  return (
-                    <Button
-                      key={server.name}
-                      size="sm"
-                      variant={isActive ? "default" : "ghost"}
-                      onClick={() => setActiveServer(i)}
-                      className={`font-mono text-xs ${isActive ? "bg-green-600 text-white" : "text-gray-400"}`}
-                      disabled={isDisabled}
-                      data-testid={`button-server-${server.name}`}
-                    >
-                      {server.label}
-                    </Button>
-                  );
-                })}
-              </div>
             </div>
 
             {!playerUrl ? (
@@ -355,7 +289,7 @@ export default function Watch() {
             <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-b-xl border border-green-500/20 border-t-0 bg-black/60 backdrop-blur-sm">
               <div className="flex-1">
                 <p className="text-xs font-mono text-gray-400 truncate" data-testid="text-now-playing">
-                  {title || "Now Playing"} - {currentServer.label}
+                  {title || "Now Playing"}
                 </p>
               </div>
 

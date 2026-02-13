@@ -48,13 +48,11 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - Routes still exist in server but are no longer used by the frontend
 
 ## Streaming
-- **Embed Player Services** (multiple servers with server selector):
-  - Server 1 (AutoEmbed): `player.autoembed.cc/embed/{movie|tv}/{imdb_id}` - supports IMDB IDs
-  - Server 2 (MultiEmbed): `multiembed.mov/?video_id={imdb_id}` - supports IMDB IDs
-  - Server 3 (VidSrc): `vidsrc.icu/embed/{movie|tv}/{imdb_id}` - supports IMDB IDs
-  - Server 4 (MultiEmbed TMDB): `multiembed.mov/?video_id={tmdb_id}&tmdb=1` - uses TMDB IDs
-  - All servers embedded via iframe in the watch page
-  - Users can switch between servers if one doesn't work
+- **AutoEmbed Player** (sole streaming source):
+  - Movie URL: `player.autoembed.cc/embed/movie/{id}`
+  - TV URL: `player.autoembed.cc/embed/tv/{id}/{season}/{episode}`
+  - Supports both IMDB IDs and TMDB IDs
+  - Embedded via iframe in the watch page
 - Content navigation:
   - TMDB items: Navigate to `/watch/{type}/{tmdb_id}`, system looks up IMDB ID from TMDB data
   - BWM/Zone search items: Navigate to `/watch/{type}/{imdb_id}?source=zone&title={title}`, IMDB ID used directly
