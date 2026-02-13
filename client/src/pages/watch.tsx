@@ -37,10 +37,10 @@ interface SeasonDetail {
   }[];
 }
 
-function getPlayerUrl(contentId: string, contentType: string, season?: number, episode?: number): string {
+function getPlayerUrl(contentId: string, contentType: string, season: number, episode: number): string {
   if (!contentId) return "";
   if (contentType === "tv") {
-    return `https://player.autoembed.cc/embed/tv/${contentId}/${season || 1}/${episode || 1}`;
+    return `https://player.autoembed.cc/embed/tv/${contentId}/${season}/${episode}`;
   }
   return `https://player.autoembed.cc/embed/movie/${contentId}`;
 }
@@ -57,30 +57,29 @@ export default function Watch() {
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDownloads, setShowDownloads] = useState(false);
-  const [selectedSeason, setSelectedSeason] = useState(1);
-  const [selectedEpisode, setSelectedEpisode] = useState(1);
-  const [playerKey, setPlayerKey] = useState(0);
+  const [season, setSeason] = useState(1);
+  const [episode, setEpisode] = useState(1);
+  const [iframeKey, setIframeKey] = useState(0);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerSectionRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  const changeSeason = useCallback((season: number) => {
-    setSelectedSeason(season);
-    setSelectedEpisode(1);
-    setPlayerKey(k => k + 1);
-  }, []);
-
-  const changeEpisode = useCallback((episode: number) => {
-    setSelectedEpisode(episode);
-    setPlayerKey(k => k + 1);
-  }, []);
+  const lastIdRef = useRef(id);
 
   useEffect(() => {
-    setShowDownloads(false);
-    setSelectedSeason(1);
-    setSelectedEpisode(1);
-    setPlayerKey(0);
+    if (lastIdRef.current !== id) {
+      setSeason(1);
+      setEpisode(1);
+      setIframeKey(0);
+      setShowDownloads(false);
+      lastIdRef.current = id;
+    }
   }, [id]);
+
+  const goToEpisode = useCallback((s: number, e: number) => {
+    setSeason(s);
+    setEpisode(e);
+    setIframeKey(prev => prev + 1);
+  }, []);
 
   const scrollToPlayer = useCallback(() => {
     setTimeout(() => {
@@ -121,23 +120,25 @@ export default function Watch() {
     return null;
   }, [type, isZone, id, tmdbData]);
 
-  const { data: seasonData } = useQuery<SeasonDetail>({
-    queryKey: ["/api/tmdb/tv", tvId, "season", selectedSeason],
+  const { data: seasonData, isLoading: seasonLoading } = useQuery<SeasonDetail>({
+    queryKey: ["/api/tmdb/tv", tvId, "season", season],
     queryFn: async () => {
-      const res = await fetch(`/api/tmdb/tv/${tvId}/season/${selectedSeason}`);
+      const res = await fetch(`/api/tmdb/tv/${tvId}/season/${season}`);
       if (!res.ok) throw new Error("Failed to fetch season");
       return res.json();
     },
     enabled: !!tvId && type === "tv",
   });
 
-  const episodeCount = seasonData?.episodes?.length || 0;
+  const episodes = seasonData?.episodes || [];
+  const episodeCount = episodes.length;
+  const seasonCount = tmdbData?.number_of_seasons || 0;
 
   useEffect(() => {
-    if (episodeCount > 0 && selectedEpisode > episodeCount) {
-      setSelectedEpisode(episodeCount);
+    if (episodeCount > 0 && episode > episodeCount) {
+      setEpisode(episodeCount);
     }
-  }, [episodeCount, selectedEpisode]);
+  }, [episodeCount, episode]);
 
   const imdbId = useMemo(() => {
     if (isZone && id.startsWith("tt")) return id;
@@ -153,15 +154,12 @@ export default function Watch() {
   }, [tmdbData, isZone, id]);
 
   const zoneTitle = urlParams.get("title") || "";
-
   const title = isZone
     ? (zoneTitle || tmdbData?.title || tmdbData?.name || id)
     : (tmdbData?.title || tmdbData?.name || "");
 
   const contentId = tmdbId || imdbId || "";
-  const playerUrl = useMemo(() => {
-    return getPlayerUrl(contentId, type, selectedSeason, selectedEpisode);
-  }, [contentId, type, selectedSeason, selectedEpisode]);
+  const playerUrl = getPlayerUrl(contentId, type, season, episode);
 
   const posterUrl = getImageUrl(tmdbData?.poster_path || null, "w500");
   const backdropUrl = getImageUrl(tmdbData?.backdrop_path || null, "w1280");
@@ -170,7 +168,43 @@ export default function Watch() {
   const description = tmdbData?.overview || "";
   const duration = tmdbData?.runtime || 0;
 
-  const seasonCount = tmdbData?.number_of_seasons || 0;
+  const handlePrev = useCallback(() => {
+    if (episode > 1) {
+      goToEpisode(season, episode - 1);
+      scrollToPlayer();
+    } else if (season > 1) {
+      setSeason(season - 1);
+      setEpisode(999);
+      setIframeKey(prev => prev + 1);
+      scrollToPlayer();
+    }
+  }, [episode, season, goToEpisode, scrollToPlayer]);
+
+  const handleNext = useCallback(() => {
+    if (episodeCount > 0 && episode < episodeCount) {
+      goToEpisode(season, episode + 1);
+      scrollToPlayer();
+    } else if (season < seasonCount) {
+      goToEpisode(season + 1, 1);
+      scrollToPlayer();
+    }
+  }, [episode, episodeCount, season, seasonCount, goToEpisode, scrollToPlayer]);
+
+  useEffect(() => {
+    if (type !== "tv") return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data === "ended" || event.data?.type === "ended" || event.data?.event === "ended" || event.data?.event === "video_end") {
+        handleNext();
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [type, handleNext]);
+
+  const canGoPrev = !(season === 1 && episode === 1);
+  const canGoNext = type === "tv" && (episode < episodeCount || season < seasonCount);
+
+  const currentEpisodeData = episodes.find(ep => ep.episode_number === episode);
 
   if (tmdbLoading) {
     return (
@@ -265,114 +299,101 @@ export default function Watch() {
           </div>
 
           <div ref={playerSectionRef}>
-          <GlassPanel className="mb-8">
-            <div className="flex items-center gap-4 mb-4">
-              <h2 className="text-lg font-display font-bold text-white flex items-center gap-2" data-testid="text-stream-heading">
-                <Play className="w-5 h-5 text-green-400" />
-                Stream Now
-                {type === "tv" && (
-                  <span className="text-xs font-mono text-gray-500 ml-2">
-                    S{selectedSeason} E{selectedEpisode}
-                  </span>
-                )}
-              </h2>
-            </div>
+            <GlassPanel className="mb-8">
+              <div className="flex items-center gap-4 mb-4">
+                <h2 className="text-lg font-display font-bold text-white flex items-center gap-2" data-testid="text-stream-heading">
+                  <Play className="w-5 h-5 text-green-400" />
+                  Stream Now
+                  {type === "tv" && (
+                    <Badge variant="outline" className="text-green-400 border-green-500/30 bg-green-500/10 font-mono text-xs ml-2" data-testid="badge-current-episode">
+                      Season {season} - Episode {episode}
+                      {currentEpisodeData?.name ? ` : ${currentEpisodeData.name}` : ""}
+                    </Badge>
+                  )}
+                </h2>
+              </div>
 
-            {!playerUrl ? (
-              <div className="w-full aspect-video rounded-t-xl border border-green-500/20 border-b-0 bg-black flex items-center justify-center">
-                <div className="text-center">
-                  <Search className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
-                  <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
-                    No streaming source found for this title
+              {!playerUrl ? (
+                <div className="w-full aspect-video rounded-t-xl border border-green-500/20 border-b-0 bg-black flex items-center justify-center">
+                  <div className="text-center">
+                    <Search className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
+                    <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
+                      No streaming source found for this title
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div ref={playerContainerRef} className="relative w-full aspect-video rounded-t-xl overflow-hidden border border-green-500/20 border-b-0 bg-black">
+                  <iframe
+                    ref={iframeRef}
+                    key={iframeKey}
+                    src={playerUrl}
+                    className="absolute inset-0 w-full h-full"
+                    allowFullScreen
+                    allow="autoplay; fullscreen; encrypted-media"
+                    referrerPolicy="origin"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+                    data-testid="iframe-player"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-b-xl border border-green-500/20 border-t-0 bg-black/60 backdrop-blur-sm">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-mono text-gray-400 truncate" data-testid="text-now-playing">
+                    {title || "Now Playing"}
+                    {type === "tv" && ` - S${season}E${episode}`}
                   </p>
                 </div>
-              </div>
-            ) : (
-              <div ref={playerContainerRef} className="relative w-full aspect-video rounded-t-xl overflow-hidden border border-green-500/20 border-b-0 bg-black">
-                <iframe
-                  ref={iframeRef}
-                  key={`${playerUrl}-${playerKey}`}
-                  src={playerUrl}
-                  className="absolute inset-0 w-full h-full"
-                  allowFullScreen
-                  allow="autoplay; fullscreen; encrypted-media"
-                  referrerPolicy="origin"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
-                  data-testid="iframe-player"
-                />
-              </div>
-            )}
 
-            <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-b-xl border border-green-500/20 border-t-0 bg-black/60 backdrop-blur-sm">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-mono text-gray-400 truncate" data-testid="text-now-playing">
-                  {title || "Now Playing"}
-                  {type === "tv" && ` - S${selectedSeason}E${selectedEpisode}`}
-                </p>
+                <div className="flex items-center gap-1">
+                  {type === "tv" && (
+                    <>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={handlePrev}
+                        disabled={!canGoPrev}
+                        className="text-green-400"
+                        data-testid="button-prev-episode"
+                      >
+                        <SkipBack className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={handleNext}
+                        disabled={!canGoNext}
+                        className="text-green-400"
+                        data-testid="button-next-episode"
+                      >
+                        <SkipForward className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowDownloads(!showDownloads)}
+                    className="text-green-400 font-mono text-xs"
+                    data-testid="button-toggle-downloads"
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    Downloads
+                    <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showDownloads ? "rotate-180" : ""}`} />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={toggleFullscreen}
+                    className="text-white"
+                    data-testid="button-fullscreen"
+                  >
+                    {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                  </Button>
+                </div>
               </div>
-
-              <div className="flex items-center gap-1">
-                {type === "tv" && (
-                  <>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        if (selectedEpisode > 1) {
-                          changeEpisode(selectedEpisode - 1);
-                        } else if (selectedSeason > 1) {
-                          setSelectedSeason(selectedSeason - 1);
-                          setSelectedEpisode(999);
-                          setPlayerKey(k => k + 1);
-                        }
-                      }}
-                      disabled={selectedSeason === 1 && selectedEpisode === 1}
-                      className="text-green-400"
-                      data-testid="button-prev-episode"
-                    >
-                      <SkipBack className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        if (episodeCount > 0 && selectedEpisode < episodeCount) {
-                          changeEpisode(selectedEpisode + 1);
-                        } else if (selectedSeason < seasonCount) {
-                          changeSeason(selectedSeason + 1);
-                        }
-                      }}
-                      disabled={selectedSeason >= seasonCount && selectedEpisode >= episodeCount}
-                      className="text-green-400"
-                      data-testid="button-next-episode"
-                    >
-                      <SkipForward className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowDownloads(!showDownloads)}
-                  className="text-green-400 font-mono text-xs"
-                  data-testid="button-toggle-downloads"
-                >
-                  <Download className="w-4 h-4 mr-1" />
-                  Downloads
-                  <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showDownloads ? "rotate-180" : ""}`} />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={toggleFullscreen}
-                  className="text-white"
-                  data-testid="button-fullscreen"
-                >
-                  {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-                </Button>
-              </div>
-            </div>
-          </GlassPanel>
+            </GlassPanel>
           </div>
 
           {showDownloads && (
@@ -395,40 +416,51 @@ export default function Watch() {
               <div className="mb-4">
                 <span className="text-xs font-mono text-gray-400 mr-3">Season:</span>
                 <div className="flex gap-1 flex-wrap mt-1">
-                  {Array.from({ length: seasonCount }, (_, i) => (
+                  {Array.from({ length: seasonCount }, (_, i) => i + 1).map((s) => (
                     <Button
-                      key={i}
+                      key={s}
                       size="sm"
-                      variant={selectedSeason === (i + 1) ? "default" : "ghost"}
-                      onClick={() => { changeSeason(i + 1); scrollToPlayer(); }}
-                      className={`font-mono text-xs ${selectedSeason === (i + 1) ? "bg-green-600 text-white" : "text-gray-400"}`}
-                      data-testid={`button-season-${i + 1}`}
+                      variant={season === s ? "default" : "ghost"}
+                      onClick={() => {
+                        goToEpisode(s, 1);
+                        scrollToPlayer();
+                      }}
+                      className={`font-mono text-xs ${season === s ? "bg-green-600 text-white" : "text-gray-400"}`}
+                      data-testid={`button-season-${s}`}
                     >
-                      S{i + 1}
+                      S{s}
                     </Button>
                   ))}
                 </div>
               </div>
 
-              {episodeCount > 0 && (
+              {seasonLoading ? (
+                <div className="flex items-center gap-3 py-8 justify-center">
+                  <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
+                  <span className="text-sm font-mono text-gray-400">Loading episodes...</span>
+                </div>
+              ) : episodeCount > 0 ? (
                 <div>
                   <span className="text-xs font-mono text-gray-400 mb-1 block">
                     Episodes ({episodeCount}):
                   </span>
                   <div className="grid gap-2 mt-2 max-h-[400px] overflow-y-auto pr-1">
-                    {seasonData!.episodes.map((ep) => (
+                    {episodes.map((ep) => (
                       <button
-                        key={ep.episode_number}
-                        onClick={() => { changeEpisode(ep.episode_number); scrollToPlayer(); }}
+                        key={`s${season}-e${ep.episode_number}`}
+                        onClick={() => {
+                          goToEpisode(season, ep.episode_number);
+                          scrollToPlayer();
+                        }}
                         className={`flex items-start gap-3 p-3 rounded-md text-left transition-all ${
-                          selectedEpisode === ep.episode_number
+                          episode === ep.episode_number
                             ? "bg-green-500/15 border border-green-500/30"
                             : "bg-black/30 border border-green-500/5 hover:border-green-500/15"
                         }`}
                         data-testid={`button-episode-${ep.episode_number}`}
                       >
                         <div className={`flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center font-mono text-xs font-bold ${
-                          selectedEpisode === ep.episode_number
+                          episode === ep.episode_number
                             ? "bg-green-500 text-black"
                             : "bg-green-500/10 text-green-400"
                         }`}>
@@ -436,7 +468,7 @@ export default function Watch() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm font-mono font-medium truncate ${
-                            selectedEpisode === ep.episode_number ? "text-green-300" : "text-white"
+                            episode === ep.episode_number ? "text-green-300" : "text-white"
                           }`}>
                             {ep.name || `Episode ${ep.episode_number}`}
                           </p>
@@ -452,7 +484,7 @@ export default function Watch() {
                             )}
                           </div>
                         </div>
-                        {selectedEpisode === ep.episode_number && (
+                        {episode === ep.episode_number && (
                           <div className="flex-shrink-0">
                             <Play className="w-4 h-4 text-green-400 fill-green-400" />
                           </div>
@@ -461,7 +493,7 @@ export default function Watch() {
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
             </GlassPanel>
           )}
         </div>
