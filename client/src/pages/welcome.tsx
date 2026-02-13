@@ -7,6 +7,7 @@ import { ContentCard } from "@/components/content-card";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import wolflixLogo from "@assets/wolflix-logo.png";
 
 const stats = [
   { label: "Total Movies", value: "500K+", icon: Film, color: "text-green-400" },
@@ -87,9 +88,12 @@ export default function Welcome() {
           <div className="mb-2">
             <span className="text-xs font-mono uppercase tracking-widest text-green-400">Welcome to</span>
           </div>
-          <h1 className="text-6xl md:text-7xl font-display font-bold text-white mb-2">
-            WOLF<span className="text-green-400">LIX</span>
-          </h1>
+          <div className="flex items-center gap-4 mb-2">
+            <img src={wolflixLogo} alt="WOLFLIX" className="w-16 h-16 md:w-20 md:h-20 rounded-2xl object-cover" />
+            <h1 className="text-6xl md:text-7xl font-display font-bold text-white">
+              WOLF<span className="text-green-400">LIX</span>
+            </h1>
+          </div>
           <p className="text-lg text-gray-400 font-mono max-w-xl mb-6">
             Your premium streaming platform. Discover movies, TV shows, and exclusive content all in one place.
           </p>

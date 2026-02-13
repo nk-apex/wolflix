@@ -1,8 +1,9 @@
 import { Link, useLocation } from "wouter";
 import { 
-  Clapperboard, Film, Tv, Theater, Palette, BookOpen, 
-  Flame, Smartphone, Search, Settings, User 
+  Film, Tv, Theater, Palette, BookOpen, 
+  Flame, Smartphone, Search, Settings, User, Clapperboard
 } from "lucide-react";
+import wolflixLogo from "@assets/wolflix-logo.png";
 import {
   Sidebar,
   SidebarContent,
@@ -42,9 +43,7 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         <Link href="/">
           <div className="flex items-center gap-2 cursor-pointer" data-testid="link-logo">
-            <div className="rounded-lg bg-green-500/10 p-1.5">
-              <Clapperboard className="w-5 h-5 text-green-400" />
-            </div>
+            <img src={wolflixLogo} alt="WOLFLIX" className="w-8 h-8 rounded-lg object-cover" />
             <span className="text-xl font-display font-bold text-white tracking-wide">
               WOLF<span className="text-green-400">LIX</span>
             </span>
