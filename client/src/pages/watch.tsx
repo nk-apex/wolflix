@@ -70,9 +70,6 @@ export default function Watch() {
   }, [id, isMovieBox]);
 
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
-  const [streamServer, setStreamServer] = useState<"multiembed" | "autoembed" | "2embed" | "moviebox">(
-    isMovieBox ? "moviebox" : "multiembed"
-  );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const playerContainerRef = useRef<HTMLDivElement>(null);
 
@@ -144,13 +141,7 @@ export default function Watch() {
 
   const movieboxDomain = streamDomain?.data?.replace(/\/$/, "") || "https://123movienow.cc";
 
-  const streamUrls: Record<string, string> = {
-    multiembed: `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,
-    autoembed: type === "movie" ? `https://autoembed.co/movie/tmdb/${id}` : `https://autoembed.co/tv/tmdb/${id}`,
-    "2embed": `https://www.2embed.cc/embed/${id}`,
-    moviebox: `${movieboxDomain}/play/${id}`,
-  };
-  const streamUrl = streamUrls[streamServer];
+  const streamUrl = `${movieboxDomain}/play/${id}`;
 
   const posterUrl = isMovieBox
     ? (mbItem ? getMovieBoxCover(mbItem) : "")
@@ -319,45 +310,10 @@ export default function Watch() {
                 <Play className="w-5 h-5 text-green-400" />
                 Stream Now
               </h2>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-mono text-gray-500" data-testid="text-server-label">Server:</span>
-                <Button
-                  size="sm"
-                  variant={streamServer === "multiembed" ? "default" : "ghost"}
-                  onClick={() => setStreamServer("multiembed")}
-                  className={`text-xs font-mono ${streamServer === "multiembed" ? "bg-green-500 text-black" : "text-gray-400"}`}
-                  data-testid="button-server-multiembed"
-                >
-                  Server 1
-                </Button>
-                <Button
-                  size="sm"
-                  variant={streamServer === "autoembed" ? "default" : "ghost"}
-                  onClick={() => setStreamServer("autoembed")}
-                  className={`text-xs font-mono ${streamServer === "autoembed" ? "bg-green-500 text-black" : "text-gray-400"}`}
-                  data-testid="button-server-autoembed"
-                >
-                  Server 2
-                </Button>
-                <Button
-                  size="sm"
-                  variant={streamServer === "2embed" ? "default" : "ghost"}
-                  onClick={() => setStreamServer("2embed")}
-                  className={`text-xs font-mono ${streamServer === "2embed" ? "bg-green-500 text-black" : "text-gray-400"}`}
-                  data-testid="button-server-2embed"
-                >
-                  Server 3
-                </Button>
-                <Button
-                  size="sm"
-                  variant={streamServer === "moviebox" ? "default" : "ghost"}
-                  onClick={() => setStreamServer("moviebox")}
-                  className={`text-xs font-mono ${streamServer === "moviebox" ? "bg-emerald-500 text-black" : "text-emerald-400"}`}
-                  data-testid="button-server-moviebox"
-                >
-                  MovieBox
-                </Button>
-              </div>
+              <Badge variant="outline" className="text-emerald-400 border-emerald-500/20 bg-emerald-500/10 font-mono" data-testid="badge-server-moviebox">
+                <Globe className="w-3 h-3 mr-1" />
+                MovieBox
+              </Badge>
             </div>
             <div ref={playerContainerRef} className="relative w-full aspect-video rounded-xl overflow-hidden border border-green-500/20 bg-black">
               <iframe
