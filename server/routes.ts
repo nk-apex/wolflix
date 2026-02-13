@@ -169,6 +169,7 @@ export async function registerRoutes(
     }
   });
 
+
   app.get("/api/wolfmovieapi/stream-domain", async (_req, res) => {
     try {
       const data = await movieboxGet("/media-player/get-domain");

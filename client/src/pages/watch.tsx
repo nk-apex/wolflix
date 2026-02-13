@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Pause, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, Globe, Subtitles, SkipBack, SkipForward, ChevronDown } from "lucide-react";
+import { Play, Pause, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, Globe, Subtitles, SkipBack, SkipForward, ChevronDown, Monitor, Tv2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
@@ -50,6 +50,14 @@ interface TMDBDetail {
   status: string;
 }
 
+function decodeHtmlEntities(str: string): string {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = str;
+  return textarea.value;
+}
+
+type StreamSource = "vidsrc" | "moviebox";
+
 export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
   const [, navigate] = useLocation();
@@ -73,8 +81,16 @@ export default function Watch() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isStopped, setIsStopped] = useState(false);
   const [showDownloads, setShowDownloads] = useState(false);
+  const [activeStream, setActiveStream] = useState<StreamSource>(isMovieBox ? "moviebox" : "vidsrc");
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    setActiveStream(isMovieBox ? "moviebox" : "vidsrc");
+    setIsStopped(false);
+    setShowDownloads(false);
+    setSelectedSource(null);
+  }, [id, isMovieBox]);
 
   const toggleFullscreen = useCallback(() => {
     if (!playerContainerRef.current) return;
@@ -112,9 +128,52 @@ export default function Watch() {
 
   const mbItem = mbItemFromStorage;
 
+  const mbItemTitle = isMovieBox ? (mbItem?.title || "") : "";
+
+  const { data: mbSearchByTitle } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
+    queryKey: ["/api/wolfmovieapi/search-recover", id, mbItemTitle],
+    queryFn: async () => {
+      if (mbItemTitle) {
+        const res = await fetch(`/api/wolfmovieapi/search?keyword=${encodeURIComponent(mbItemTitle)}&page=1&perPage=5`);
+        if (!res.ok) throw new Error("Search failed");
+        return res.json();
+      }
+      const trendRes = await fetch(`/api/wolfmovieapi/trending?page=1&perPage=50`);
+      if (!trendRes.ok) throw new Error("Trending failed");
+      const trendData = await trendRes.json();
+      return { code: 0, data: { items: trendData?.data?.subjectList || [] } };
+    },
+    enabled: isMovieBox && !mbItem?.detailPath,
+  });
+
+  const recoveredMbItem = useMemo(() => {
+    if (mbItem?.detailPath) return null;
+    if (!mbSearchByTitle?.data?.items) return null;
+    return mbSearchByTitle.data.items.find(item => String(item.subjectId) === String(id)) || null;
+  }, [mbSearchByTitle, id, mbItem]);
+
+  const effectiveMbItem = mbItem || recoveredMbItem;
+
   const title = isMovieBox
-    ? (mbItem?.title || "")
+    ? (effectiveMbItem?.title || "")
     : (tmdbData?.title || tmdbData?.name || "");
+
+  const { data: mbSearchForTmdb } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
+    queryKey: ["/api/wolfmovieapi/search-for-tmdb", title],
+    queryFn: async () => {
+      const res = await fetch(`/api/wolfmovieapi/search?keyword=${encodeURIComponent(title)}&page=1&perPage=5`);
+      if (!res.ok) throw new Error("MB search failed");
+      return res.json();
+    },
+    enabled: !isMovieBox && !!title && title.length > 1,
+  });
+
+  const mbMatchForTmdb = useMemo(() => {
+    if (!mbSearchForTmdb?.data?.items) return null;
+    const items = mbSearchForTmdb.data.items;
+    const lowerTitle = title.toLowerCase();
+    return items.find(item => item.title.toLowerCase() === lowerTitle) || items[0] || null;
+  }, [mbSearchForTmdb, title]);
 
   const { data: arslanSearch, isLoading: arslanSearching } = useQuery<{ result?: { data?: ArslanSearchResult[] } }>({
     queryKey: ["/api/arslan/search", title],
@@ -140,42 +199,59 @@ export default function Watch() {
   });
 
   const movieDetail = arslanDetail?.result?.data;
-  const dlLinks = movieDetail?.dl_links || [];
+  const dlLinks = (movieDetail?.dl_links || []).map(link => ({
+    ...link,
+    link: decodeHtmlEntities(link.link),
+  }));
 
   const movieboxDomain = streamDomain?.data?.replace(/\/$/, "") || "https://123movienow.cc";
 
-  const detailPath = isMovieBox && mbItem?.detailPath ? mbItem.detailPath : id;
-  const streamUrl = `${movieboxDomain}/play/${detailPath}`;
+  const movieboxDetailPath = useMemo(() => {
+    if (isMovieBox) {
+      return effectiveMbItem?.detailPath || null;
+    }
+    return mbMatchForTmdb?.detailPath || null;
+  }, [isMovieBox, effectiveMbItem, mbMatchForTmdb]);
+
+  const movieboxStreamUrl = movieboxDetailPath ? `${movieboxDomain}/play/${movieboxDetailPath}` : null;
+  const vidsrcStreamUrl = !isMovieBox ? `https://vidsrc.icu/embed/${type === "tv" ? "tv" : "movie"}/${id}` : null;
+
+  const streamUrl = useMemo(() => {
+    if (activeStream === "moviebox") {
+      return movieboxStreamUrl || vidsrcStreamUrl || "";
+    }
+    return vidsrcStreamUrl || movieboxStreamUrl || "";
+  }, [activeStream, movieboxStreamUrl, vidsrcStreamUrl]);
 
   const posterUrl = isMovieBox
-    ? (mbItem ? getMovieBoxCover(mbItem) : "")
+    ? (effectiveMbItem ? getMovieBoxCover(effectiveMbItem) : "")
     : getImageUrl(tmdbData?.poster_path || null, "w500");
 
   const backdropUrl = isMovieBox
-    ? (mbItem?.stills?.[0]?.url || "")
+    ? (effectiveMbItem?.stills?.[0]?.url || "")
     : getImageUrl(tmdbData?.backdrop_path || null, "w1280");
 
   const rating = isMovieBox
-    ? (mbItem ? parseFloat(getMovieBoxRating(mbItem)) : 0)
+    ? (effectiveMbItem ? parseFloat(getMovieBoxRating(effectiveMbItem)) : 0)
     : (tmdbData?.vote_average || 0);
 
   const year = isMovieBox
-    ? (mbItem ? getMovieBoxYear(mbItem) : "")
+    ? (effectiveMbItem ? getMovieBoxYear(effectiveMbItem) : "")
     : ((tmdbData?.release_date || tmdbData?.first_air_date)?.split("-")[0] || "");
 
   const genre = isMovieBox
-    ? (mbItem?.genre || "")
+    ? (effectiveMbItem?.genre || "")
     : "";
 
   const description = isMovieBox
-    ? (mbItem?.description || "")
+    ? (effectiveMbItem?.description || "")
     : (tmdbData?.overview || "");
 
   const duration = isMovieBox
-    ? (mbItem?.duration ? Math.round(mbItem.duration / 60) : 0)
+    ? (effectiveMbItem?.duration ? Math.round(effectiveMbItem.duration / 60) : 0)
     : (tmdbData?.runtime || 0);
 
-  const country = isMovieBox ? (mbItem?.countryName || "") : "";
+  const country = isMovieBox ? (effectiveMbItem?.countryName || "") : "";
 
   const mbRelated = mbDetailRec?.data?.items || [];
 
@@ -302,15 +378,15 @@ export default function Watch() {
                 </p>
               )}
 
-              {isMovieBox && mbItem?.season && mbItem.season.length > 0 && (
+              {isMovieBox && effectiveMbItem?.season && effectiveMbItem.season.length > 0 && (
                 <p className="text-xs font-mono text-gray-500 mb-4" data-testid="text-seasons-mb">
-                  {mbItem.season.length} Season{mbItem.season.length > 1 ? "s" : ""}
+                  {effectiveMbItem.season.length} Season{effectiveMbItem.season.length > 1 ? "s" : ""}
                 </p>
               )}
 
-              {isMovieBox && mbItem?.staffList && mbItem.staffList.length > 0 && (
+              {isMovieBox && effectiveMbItem?.staffList && effectiveMbItem.staffList.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 mb-4">
-                  {mbItem.staffList.slice(0, 5).map((staff) => (
+                  {effectiveMbItem.staffList.slice(0, 5).map((staff) => (
                     <span key={staff.staffId} className="text-xs font-mono text-gray-500">
                       {staff.staffName} ({staff.staffRole})
                     </span>
@@ -326,30 +402,63 @@ export default function Watch() {
                 <Play className="w-5 h-5 text-green-400" />
                 Stream Now
               </h2>
-              <Badge variant="outline" className="text-emerald-400 border-emerald-500/20 bg-emerald-500/10 font-mono" data-testid="badge-server-moviebox">
-                <Globe className="w-3 h-3 mr-1" />
-                MovieBox
-              </Badge>
+              <div className="flex items-center gap-2">
+                {!isMovieBox && (
+                  <Button
+                    size="sm"
+                    variant={activeStream === "vidsrc" ? "default" : "ghost"}
+                    onClick={() => { setActiveStream("vidsrc"); setIsStopped(false); }}
+                    className={`font-mono text-xs ${activeStream === "vidsrc" ? "bg-green-600 text-white" : "text-gray-400"}`}
+                    data-testid="button-source-vidsrc"
+                  >
+                    <Monitor className="w-3 h-3 mr-1" />
+                    Server 1
+                  </Button>
+                )}
+                {(movieboxStreamUrl || isMovieBox) && (
+                  <Button
+                    size="sm"
+                    variant={activeStream === "moviebox" ? "default" : "ghost"}
+                    onClick={() => { setActiveStream("moviebox"); setIsStopped(false); }}
+                    className={`font-mono text-xs ${activeStream === "moviebox" ? "bg-emerald-600 text-white" : "text-gray-400"}`}
+                    data-testid="button-source-moviebox"
+                  >
+                    <Tv2 className="w-3 h-3 mr-1" />
+                    Server 2
+                  </Button>
+                )}
+              </div>
             </div>
-            <div ref={playerContainerRef} className="relative w-full aspect-video rounded-t-xl overflow-hidden border border-green-500/20 border-b-0 bg-black">
-              {isStopped && (
-                <div className="absolute inset-0 z-10 bg-black/70 flex items-center justify-center cursor-pointer" onClick={() => setIsStopped(false)}>
-                  <div className="text-center">
-                    <Play className="w-16 h-16 text-green-400 mx-auto mb-2" />
-                    <p className="text-sm font-mono text-gray-400">Click to Resume</p>
-                  </div>
+
+            {!streamUrl ? (
+              <div className="w-full aspect-video rounded-t-xl border border-green-500/20 border-b-0 bg-black flex items-center justify-center">
+                <div className="text-center">
+                  <Loader2 className="w-10 h-10 text-green-500/30 mx-auto mb-3 animate-spin" />
+                  <p className="text-sm font-mono text-gray-500">Loading stream source...</p>
+                  <p className="text-xs font-mono text-gray-600 mt-1">Try switching servers above if playback doesn't start</p>
                 </div>
-              )}
-              <iframe
-                ref={iframeRef}
-                src={isStopped ? "about:blank" : streamUrl}
-                className="absolute inset-0 w-full h-full"
-                allowFullScreen
-                allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-                referrerPolicy="origin"
-                data-testid="iframe-player"
-              />
-            </div>
+              </div>
+            ) : (
+              <div ref={playerContainerRef} className="relative w-full aspect-video rounded-t-xl overflow-hidden border border-green-500/20 border-b-0 bg-black">
+                {isStopped && (
+                  <div className="absolute inset-0 z-10 bg-black/70 flex items-center justify-center cursor-pointer" onClick={() => setIsStopped(false)}>
+                    <div className="text-center">
+                      <Play className="w-16 h-16 text-green-400 mx-auto mb-2" />
+                      <p className="text-sm font-mono text-gray-400">Click to Resume</p>
+                    </div>
+                  </div>
+                )}
+                <iframe
+                  ref={iframeRef}
+                  src={isStopped ? "about:blank" : streamUrl}
+                  className="absolute inset-0 w-full h-full"
+                  allowFullScreen
+                  allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                  referrerPolicy="origin"
+                  data-testid="iframe-player"
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-b-xl border border-green-500/20 border-t-0 bg-black/60 backdrop-blur-sm">
               <div className="flex items-center gap-2">
