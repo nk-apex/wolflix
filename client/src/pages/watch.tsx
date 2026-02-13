@@ -60,6 +60,7 @@ export default function Watch() {
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState(1);
   const playerContainerRef = useRef<HTMLDivElement>(null);
+  const playerSectionRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -67,6 +68,10 @@ export default function Watch() {
     setSelectedSeason(1);
     setSelectedEpisode(1);
   }, [id]);
+
+  const scrollToPlayer = useCallback(() => {
+    playerSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const toggleFullscreen = useCallback(() => {
     if (!playerContainerRef.current) return;
@@ -244,6 +249,7 @@ export default function Watch() {
             </div>
           </div>
 
+          <div ref={playerSectionRef}>
           <GlassPanel className="mb-8">
             <div className="flex items-center gap-4 mb-4">
               <h2 className="text-lg font-display font-bold text-white flex items-center gap-2" data-testid="text-stream-heading">
@@ -352,6 +358,7 @@ export default function Watch() {
               </div>
             </div>
           </GlassPanel>
+          </div>
 
           {showDownloads && (
             <GlassPanel className="mb-8">
@@ -378,7 +385,7 @@ export default function Watch() {
                       key={i}
                       size="sm"
                       variant={selectedSeason === (i + 1) ? "default" : "ghost"}
-                      onClick={() => { setSelectedSeason(i + 1); setSelectedEpisode(1); }}
+                      onClick={() => { setSelectedSeason(i + 1); setSelectedEpisode(1); scrollToPlayer(); }}
                       className={`font-mono text-xs ${selectedSeason === (i + 1) ? "bg-green-600 text-white" : "text-gray-400"}`}
                       data-testid={`button-season-${i + 1}`}
                     >
@@ -397,7 +404,7 @@ export default function Watch() {
                     {seasonData!.episodes.map((ep) => (
                       <button
                         key={ep.episode_number}
-                        onClick={() => setSelectedEpisode(ep.episode_number)}
+                        onClick={() => { setSelectedEpisode(ep.episode_number); scrollToPlayer(); }}
                         className={`flex items-start gap-3 p-3 rounded-md text-left transition-all ${
                           selectedEpisode === ep.episode_number
                             ? "bg-green-500/15 border border-green-500/30"
