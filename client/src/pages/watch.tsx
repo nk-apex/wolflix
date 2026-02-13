@@ -59,18 +59,33 @@ export default function Watch() {
   const [showDownloads, setShowDownloads] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState(1);
+  const [playerKey, setPlayerKey] = useState(0);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerSectionRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const changeSeason = useCallback((season: number) => {
+    setSelectedSeason(season);
+    setSelectedEpisode(1);
+    setPlayerKey(k => k + 1);
+  }, []);
+
+  const changeEpisode = useCallback((episode: number) => {
+    setSelectedEpisode(episode);
+    setPlayerKey(k => k + 1);
+  }, []);
 
   useEffect(() => {
     setShowDownloads(false);
     setSelectedSeason(1);
     setSelectedEpisode(1);
+    setPlayerKey(0);
   }, [id]);
 
   const scrollToPlayer = useCallback(() => {
-    playerSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => {
+      playerSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   }, []);
 
   const toggleFullscreen = useCallback(() => {
@@ -143,7 +158,7 @@ export default function Watch() {
     ? (zoneTitle || tmdbData?.title || tmdbData?.name || id)
     : (tmdbData?.title || tmdbData?.name || "");
 
-  const contentId = imdbId || tmdbId || "";
+  const contentId = tmdbId || imdbId || "";
   const playerUrl = useMemo(() => {
     return getPlayerUrl(contentId, type, selectedSeason, selectedEpisode);
   }, [contentId, type, selectedSeason, selectedEpisode]);
@@ -276,7 +291,7 @@ export default function Watch() {
               <div ref={playerContainerRef} className="relative w-full aspect-video rounded-t-xl overflow-hidden border border-green-500/20 border-b-0 bg-black">
                 <iframe
                   ref={iframeRef}
-                  key={playerUrl}
+                  key={`${playerUrl}-${playerKey}`}
                   src={playerUrl}
                   className="absolute inset-0 w-full h-full"
                   allowFullScreen
@@ -304,10 +319,11 @@ export default function Watch() {
                       variant="ghost"
                       onClick={() => {
                         if (selectedEpisode > 1) {
-                          setSelectedEpisode(selectedEpisode - 1);
+                          changeEpisode(selectedEpisode - 1);
                         } else if (selectedSeason > 1) {
                           setSelectedSeason(selectedSeason - 1);
                           setSelectedEpisode(999);
+                          setPlayerKey(k => k + 1);
                         }
                       }}
                       disabled={selectedSeason === 1 && selectedEpisode === 1}
@@ -321,10 +337,9 @@ export default function Watch() {
                       variant="ghost"
                       onClick={() => {
                         if (episodeCount > 0 && selectedEpisode < episodeCount) {
-                          setSelectedEpisode(selectedEpisode + 1);
+                          changeEpisode(selectedEpisode + 1);
                         } else if (selectedSeason < seasonCount) {
-                          setSelectedSeason(selectedSeason + 1);
-                          setSelectedEpisode(1);
+                          changeSeason(selectedSeason + 1);
                         }
                       }}
                       disabled={selectedSeason >= seasonCount && selectedEpisode >= episodeCount}
@@ -385,7 +400,7 @@ export default function Watch() {
                       key={i}
                       size="sm"
                       variant={selectedSeason === (i + 1) ? "default" : "ghost"}
-                      onClick={() => { setSelectedSeason(i + 1); setSelectedEpisode(1); scrollToPlayer(); }}
+                      onClick={() => { changeSeason(i + 1); scrollToPlayer(); }}
                       className={`font-mono text-xs ${selectedSeason === (i + 1) ? "bg-green-600 text-white" : "text-gray-400"}`}
                       data-testid={`button-season-${i + 1}`}
                     >
@@ -404,7 +419,7 @@ export default function Watch() {
                     {seasonData!.episodes.map((ep) => (
                       <button
                         key={ep.episode_number}
-                        onClick={() => { setSelectedEpisode(ep.episode_number); scrollToPlayer(); }}
+                        onClick={() => { changeEpisode(ep.episode_number); scrollToPlayer(); }}
                         className={`flex items-start gap-3 p-3 rounded-md text-left transition-all ${
                           selectedEpisode === ep.episode_number
                             ? "bg-green-500/15 border border-green-500/30"
