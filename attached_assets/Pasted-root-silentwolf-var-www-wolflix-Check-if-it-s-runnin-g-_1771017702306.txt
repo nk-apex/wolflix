@@ -1,0 +1,57 @@
+root@silentwolf:/var/www/wolflix# # Check if it's runnin
+g
+root@silentwolf:/var/www/wolflix# pm2 status | grep wolf
+lix
+│ 10 │ wolflix       │ default     │ 1.0.0   │ fork    │
+ 168946   │ 7s     │ 1    │ online    │ 0%       │ 70.8m
+b   │ root     │ disabled │
+root@silentwolf:/var/www/wolflix#
+root@silentwolf:/var/www/wolflix# # Check the logs for e
+rrors
+root@silentwolf:/var/www/wolflix# pm2 logs wolflix --lin
+es 20
+[TAILING] Tailing last 20 lines for [wolflix] process (c
+hange the value with --lines option)
+/root/.pm2/logs/wolflix-error.log last 20 lines:
+/root/.pm2/logs/wolflix-out.log last 20 lines:
+10|wolflix | 10:15:07 PM [express] GET /api/tmdb/trendin
+g 500 in 133ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:15:09 PM [express] GET /api/tmdb/movies/
+trending 500 in 108ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:15:09 PM [express] GET /api/tmdb/movies/
+genre/28 500 in 132ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:15:09 PM [express] GET /api/tmdb/movies/
+genre/18 500 in 166ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:15:09 PM [express] GET /api/tmdb/movies/
+genre/27 500 in 193ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:15:09 PM [express] GET /api/tmdb/movies/
+genre/35 500 in 236ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:15:09 PM [express] GET /api/tmdb/movies/
+genre/878 500 in 262ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:16:33 PM [express] GET /api/tmdb/trendin
+g 500 in 156ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:17:04 PM [express] GET /api/tmdb/movies/
+trending 500 in 165ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:17:04 PM [express] GET /api/tmdb/movies/
+popular 500 in 169ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:17:04 PM [express] GET /api/tmdb/movies/
+top_rated 500 in 199ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:17:04 PM [express] GET /api/tmdb/tv/popu
+lar 500 in 242ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:20:03 PM [express] GET /api/tmdb/movies/
+trending 500 in 161ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:20:03 PM [express] GET /api/tmdb/movies/
+genre/28 500 in 152ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:20:04 PM [express] GET /api/tmdb/movies/
+genre/27 500 in 202ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:20:04 PM [express] GET /api/tmdb/movies/
+genre/878 500 in 208ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:20:04 PM [express] GET /api/tmdb/movies/
+genre/35 500 in 266ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:20:04 PM [express] GET /api/tmdb/movies/
+genre/18 500 in 356ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:20:06 PM [express] GET /api/tmdb/trendin
+g 500 in 231ms :: {"error":"TMDB error: 401"}
+10|wolflix | 10:21:13 PM [express] serving on port 3004
+
+
