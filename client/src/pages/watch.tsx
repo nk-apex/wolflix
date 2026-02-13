@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, Globe, SkipBack, SkipForward, ChevronDown, Tv2, Film, Server } from "lucide-react";
+import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, SkipBack, SkipForward, ChevronDown, Tv2, Film, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
@@ -27,7 +27,18 @@ interface TMDBDetail {
   imdb_id?: string;
 }
 
-const ZONE_BASE = "https://zone.bwmxmd.co.ke";
+const EMBED_PLAYERS = {
+  vidsrc: (mediaType: string, id: string, s?: number, e?: number) =>
+    `https://vidsrc.icu/embed/${mediaType}/${id}${mediaType === "tv" && s && e ? `/${s}/${e}` : ""}`,
+  autoembed: (mediaType: string, id: string, s?: number, e?: number) =>
+    `https://player.autoembed.cc/embed/${mediaType}/${id}${mediaType === "tv" && s && e ? `/${s}/${e}` : ""}`,
+  twoembed: (mediaType: string, id: string, s?: number, e?: number) =>
+    `https://www.2embed.cc/embed/${id}${mediaType === "tv" && s && e ? `&s=${s}&e=${e}` : ""}`,
+  multiembed: (mediaType: string, id: string, s?: number, e?: number) =>
+    `https://multiembed.mov/?video_id=${id}&tmdb=1${mediaType === "tv" && s && e ? `&s=${s}&e=${e}` : ""}`,
+  superembed: (mediaType: string, id: string, s?: number, e?: number) =>
+    `https://getsuperembed.link/?video_id=${id}&tmdb=1${mediaType === "tv" && s && e ? `&s=${s}&e=${e}` : ""}`,
+};
 
 export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
@@ -82,7 +93,7 @@ export default function Watch() {
   const tmdbEndpoint = type === "tv" ? `/api/tmdb/tv/${id}` : `/api/tmdb/movie/${id}`;
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBDetail>({
     queryKey: [tmdbEndpoint],
-    enabled: !!id && !isMovieBox && !isZone,
+    enabled: !!id && !isMovieBox,
   });
 
   const { data: externalIds } = useQuery<{ imdb_id?: string }>({
@@ -179,11 +190,6 @@ export default function Watch() {
   const streamDomain = streamDomainData?.data || "https://123movienow.cc";
   const cleanStreamDomain = streamDomain.replace(/\/$/, "");
 
-  const zonePlayerUrl = useMemo(() => {
-    if (!imdbId) return "";
-    return `${ZONE_BASE}/movie/${imdbId}`;
-  }, [imdbId]);
-
   const movieBoxPlayerUrl = useMemo(() => {
     if (!effectiveSubjectId) return "";
     const se = type === "tv" ? selectedSeason : 0;
@@ -191,52 +197,42 @@ export default function Watch() {
     return `${cleanStreamDomain}/spa/videoPlayPage/movies/${effectiveSubjectId}?se=${se}&ep=${ep}`;
   }, [effectiveSubjectId, type, selectedSeason, selectedEpisode, cleanStreamDomain]);
 
-  const tmdbId = isMovieBox ? null : id;
-
-  const embedServers = useMemo(() => {
-    if (!tmdbId) return [];
-    const mediaType = type === "tv" ? "tv" : "movie";
-    return [
-      {
-        name: "VidSrc",
-        url: `https://vidsrc.icu/embed/${mediaType}/${tmdbId}${type === "tv" ? `/${selectedSeason}/${selectedEpisode}` : ""}`,
-      },
-      {
-        name: "MultiEmbed",
-        url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${type === "tv" ? `&s=${selectedSeason}&e=${selectedEpisode}` : ""}`,
-      },
-      {
-        name: "SuperEmbed",
-        url: `https://getsuperembed.link/?video_id=${tmdbId}&tmdb=1${type === "tv" ? `&s=${selectedSeason}&e=${selectedEpisode}` : ""}`,
-      },
-    ];
-  }, [tmdbId, type, selectedSeason, selectedEpisode]);
+  const tmdbId = isMovieBox ? null : (isZone ? null : id);
+  const mediaType = type === "tv" ? "tv" : "movie";
+  const s = type === "tv" ? selectedSeason : undefined;
+  const e = type === "tv" ? selectedEpisode : undefined;
 
   const allServers = useMemo(() => {
     const servers: { name: string; url: string; source: string }[] = [];
-    if (zonePlayerUrl) {
-      servers.push({ name: "Zone Stream", url: zonePlayerUrl, source: "zone" });
+
+    if (imdbId) {
+      servers.push({ name: "VidSrc", url: EMBED_PLAYERS.vidsrc(mediaType, imdbId, s, e), source: "embed" });
+      servers.push({ name: "AutoEmbed", url: EMBED_PLAYERS.autoembed(mediaType, imdbId, s, e), source: "embed" });
+      servers.push({ name: "2Embed", url: EMBED_PLAYERS.twoembed(mediaType, imdbId, s, e), source: "embed" });
     }
+
+    if (tmdbId) {
+      servers.push({ name: "VidSrc (TMDB)", url: EMBED_PLAYERS.vidsrc(mediaType, tmdbId, s, e), source: "embed" });
+      servers.push({ name: "MultiEmbed", url: EMBED_PLAYERS.multiembed(mediaType, tmdbId, s, e), source: "embed" });
+      servers.push({ name: "SuperEmbed", url: EMBED_PLAYERS.superembed(mediaType, tmdbId, s, e), source: "embed" });
+    }
+
     if (movieBoxPlayerUrl) {
-      servers.push({ name: "MovieBox Player", url: movieBoxPlayerUrl, source: "moviebox" });
+      servers.push({ name: "MovieBox", url: movieBoxPlayerUrl, source: "moviebox" });
     }
-    if (!isMovieBox) {
-      embedServers.forEach(s => {
-        servers.push({ ...s, source: "embed" });
-      });
-    }
+
     return servers;
-  }, [zonePlayerUrl, movieBoxPlayerUrl, embedServers, isMovieBox]);
+  }, [imdbId, tmdbId, mediaType, s, e, movieBoxPlayerUrl]);
 
   const activeServerUrl = allServers[selectedServer]?.url || "";
 
   const posterUrl = isMovieBox
     ? (effectiveMbItem ? getMovieBoxCover(effectiveMbItem) : "")
-    : isZone ? "" : getImageUrl(tmdbData?.poster_path || null, "w500");
+    : getImageUrl(tmdbData?.poster_path || null, "w500");
 
   const backdropUrl = isMovieBox
     ? (effectiveMbItem?.stills?.[0]?.url || "")
-    : isZone ? "" : getImageUrl(tmdbData?.backdrop_path || null, "w1280");
+    : getImageUrl(tmdbData?.backdrop_path || null, "w1280");
 
   const rating = isMovieBox
     ? (effectiveMbItem ? parseFloat(getMovieBoxRating(effectiveMbItem)) : 0)
@@ -252,7 +248,7 @@ export default function Watch() {
 
   const description = isMovieBox
     ? (effectiveMbItem?.description || "")
-    : isZone ? "Stream this content directly on Zone Stream. Use the player above to watch." : (tmdbData?.overview || "");
+    : (tmdbData?.overview || "");
 
   const duration = isMovieBox
     ? (effectiveMbItem?.duration ? Math.round(effectiveMbItem.duration / 60) : 0)
@@ -291,7 +287,7 @@ export default function Watch() {
     navigate(`/watch/${mediaType}/${target.subjectId}?source=moviebox`);
   };
 
-  if (tmdbLoading && !isMovieBox && !isZone) {
+  if (tmdbLoading && !isMovieBox) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
@@ -362,7 +358,7 @@ export default function Watch() {
                 )}
                 {isMovieBox && (
                   <Badge variant="outline" className="text-emerald-400 border-emerald-500/20 bg-emerald-500/10 font-mono" data-testid="badge-source-moviebox">
-                    <Globe className="w-3 h-3 mr-1" />
+                    <Film className="w-3 h-3 mr-1" />
                     MovieBox
                   </Badge>
                 )}
@@ -490,7 +486,7 @@ export default function Watch() {
                       className={`font-mono text-xs ${selectedServer === i ? "bg-green-600 text-white" : "text-gray-400"}`}
                       data-testid={`button-server-${i}`}
                     >
-                      {server.source === "zone" ? <Globe className="w-3 h-3 mr-1" /> : <Server className="w-3 h-3 mr-1" />}
+                      {server.source === "moviebox" ? <Film className="w-3 h-3 mr-1" /> : <Server className="w-3 h-3 mr-1" />}
                       {server.name}
                     </Button>
                   ))}

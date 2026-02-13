@@ -51,19 +51,22 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 
 ## Streaming
 - Clicking any content card navigates to `/watch/:type/:id`
-- **MovieBox Native Player**: Uses MovieBox's own streaming domain (`123movienow.cc`) as primary player
-  - URL format: `{streamDomain}/spa/videoPlayPage/movies/{subjectId}?se={season}&ep={episode}`
-  - Streaming domain fetched dynamically from MovieBox API (`/media-player/get-domain`)
-  - Player runs in iframe and makes API calls from user's browser (bypasses datacenter geo-restrictions)
-  - Note: MovieBox's play/download API endpoints are geo-restricted from datacenter IPs. The iframe approach works because API calls originate from the user's browser IP.
-- **TMDB Embed Servers** (fallback for TMDB-sourced content only):
-  - VidSrc (`vidsrc.icu/embed/{movie|tv}/{tmdb_id}`)
+- **Embed Players** (primary streaming - work with both IMDB and TMDB IDs):
+  - VidSrc (`vidsrc.icu/embed/{movie|tv}/{id}`) - supports IMDB IDs
+  - AutoEmbed (`player.autoembed.cc/embed/{movie|tv}/{id}`) - supports IMDB IDs
+  - 2Embed (`www.2embed.cc/embed/{id}`) - supports IMDB IDs
+  - VidSrc TMDB (`vidsrc.icu/embed/{movie|tv}/{tmdb_id}`) - TMDB ID variant
   - MultiEmbed (`multiembed.mov/?video_id={tmdb_id}&tmdb=1`)
   - SuperEmbed (`getsuperembed.link/?video_id={tmdb_id}&tmdb=1`)
-- For MovieBox items: MovieBox native player is primary, no embed fallback
-- For TMDB items: Searches MovieBox by title to find subjectId, offers MovieBox player + embed servers
+- **MovieBox Native Player** (fallback):
+  - URL format: `{streamDomain}/spa/videoPlayPage/movies/{subjectId}?se={season}&ep={episode}`
+  - Streaming domain fetched dynamically from MovieBox API (`/media-player/get-domain`)
+- TMDB API accepts both TMDB IDs and IMDB IDs for movie/TV detail endpoints
+- Zone search results use IMDB IDs which resolve to full TMDB details automatically
+- For TMDB items: Shows IMDB-based embeds (if imdb_id available) + TMDB-based embeds + MovieBox
+- For Zone items: Shows IMDB-based embeds + TMDB-based embeds (TMDB resolves IMDB IDs)
 - MovieBox items navigate with `?source=moviebox` and store item data in sessionStorage
-- Recovery mechanism: When sessionStorage clears after refresh, searches MovieBox by title/subjectId to recover detailPath
+- Zone items navigate with `?source=zone` and pass IMDB ID as the route id
 - Fullscreen toggle button on the player using browser Fullscreen API
 - Download links fetched from Arslan API by searching movie title
 - HTML entity decoding for download URLs using textarea helper
