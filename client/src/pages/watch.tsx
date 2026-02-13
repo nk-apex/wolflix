@@ -56,7 +56,14 @@ function decodeHtmlEntities(str: string): string {
   return textarea.value;
 }
 
-type StreamSource = "vidsrc" | "moviebox";
+const STREAM_SERVERS = [
+  { id: "vidsrc", label: "VidSrc", icon: Monitor, getUrl: (tmdbId: string, mediaType: string) => `https://vidsrc.icu/embed/${mediaType}/${tmdbId}` },
+  { id: "multiembed", label: "MultiEmbed", icon: Globe, getUrl: (tmdbId: string, mediaType: string) => `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1` },
+  { id: "superembed", label: "SuperEmbed", icon: Tv2, getUrl: (tmdbId: string, _mediaType: string) => `https://getsuperembed.link/?video_id=${tmdbId}&tmdb=1` },
+  { id: "vidsrc_me", label: "VidSrc.me", icon: Monitor, getUrl: (tmdbId: string, mediaType: string) => `https://vidsrc.net/embed/${mediaType}/${tmdbId}` },
+] as const;
+
+type StreamServerId = typeof STREAM_SERVERS[number]["id"];
 
 export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
@@ -81,12 +88,12 @@ export default function Watch() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isStopped, setIsStopped] = useState(false);
   const [showDownloads, setShowDownloads] = useState(false);
-  const [activeStream, setActiveStream] = useState<StreamSource>(isMovieBox ? "moviebox" : "vidsrc");
+  const [activeServer, setActiveServer] = useState<StreamServerId>("vidsrc");
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    setActiveStream(isMovieBox ? "moviebox" : "vidsrc");
+    setActiveServer("vidsrc");
     setIsStopped(false);
     setShowDownloads(false);
     setSelectedSource(null);
@@ -110,10 +117,6 @@ export default function Watch() {
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBDetail>({
     queryKey: ["/api/tmdb", type, id],
     enabled: !!id && !isMovieBox,
-  });
-
-  const { data: streamDomain } = useQuery<{ code: number; data: string }>({
-    queryKey: ["/api/wolfmovieapi/stream-domain"],
   });
 
   const { data: mbDetailRec } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
@@ -158,22 +161,29 @@ export default function Watch() {
     ? (effectiveMbItem?.title || "")
     : (tmdbData?.title || tmdbData?.name || "");
 
-  const { data: mbSearchForTmdb } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
-    queryKey: ["/api/wolfmovieapi/search-for-tmdb", title],
-    queryFn: async () => {
-      const res = await fetch(`/api/wolfmovieapi/search?keyword=${encodeURIComponent(title)}&page=1&perPage=5`);
-      if (!res.ok) throw new Error("MB search failed");
-      return res.json();
-    },
-    enabled: !isMovieBox && !!title && title.length > 1,
+  const { data: tmdbSearchForMb } = useQuery<{ results: { id: number; media_type: string; title?: string; name?: string }[] }>({
+    queryKey: ["/api/tmdb/search", title],
+    enabled: isMovieBox && !!title && title.length > 1,
   });
 
-  const mbMatchForTmdb = useMemo(() => {
-    if (!mbSearchForTmdb?.data?.items) return null;
-    const items = mbSearchForTmdb.data.items;
+  const tmdbIdForMb = useMemo(() => {
+    if (!isMovieBox) return null;
+    if (!tmdbSearchForMb?.results) return null;
     const lowerTitle = title.toLowerCase();
-    return items.find(item => item.title.toLowerCase() === lowerTitle) || items[0] || null;
-  }, [mbSearchForTmdb, title]);
+    const match = tmdbSearchForMb.results.find(r =>
+      (r.title || r.name || "").toLowerCase() === lowerTitle
+    ) || tmdbSearchForMb.results[0];
+    return match ? String(match.id) : null;
+  }, [tmdbSearchForMb, title, isMovieBox]);
+
+  const streamTmdbId = isMovieBox ? tmdbIdForMb : id;
+  const streamMediaType = type === "tv" ? "tv" : "movie";
+
+  const streamUrl = useMemo(() => {
+    if (!streamTmdbId) return "";
+    const server = STREAM_SERVERS.find(s => s.id === activeServer) || STREAM_SERVERS[0];
+    return server.getUrl(streamTmdbId, streamMediaType);
+  }, [streamTmdbId, streamMediaType, activeServer]);
 
   const { data: arslanSearch, isLoading: arslanSearching } = useQuery<{ result?: { data?: ArslanSearchResult[] } }>({
     queryKey: ["/api/arslan/search", title],
@@ -203,25 +213,6 @@ export default function Watch() {
     ...link,
     link: decodeHtmlEntities(link.link),
   }));
-
-  const movieboxDomain = streamDomain?.data?.replace(/\/$/, "") || "https://123movienow.cc";
-
-  const movieboxDetailPath = useMemo(() => {
-    if (isMovieBox) {
-      return effectiveMbItem?.detailPath || null;
-    }
-    return mbMatchForTmdb?.detailPath || null;
-  }, [isMovieBox, effectiveMbItem, mbMatchForTmdb]);
-
-  const movieboxStreamUrl = movieboxDetailPath ? `${movieboxDomain}/play/${movieboxDetailPath}` : null;
-  const vidsrcStreamUrl = !isMovieBox ? `https://vidsrc.icu/embed/${type === "tv" ? "tv" : "movie"}/${id}` : null;
-
-  const streamUrl = useMemo(() => {
-    if (activeStream === "moviebox") {
-      return movieboxStreamUrl || vidsrcStreamUrl || "";
-    }
-    return vidsrcStreamUrl || movieboxStreamUrl || "";
-  }, [activeStream, movieboxStreamUrl, vidsrcStreamUrl]);
 
   const posterUrl = isMovieBox
     ? (effectiveMbItem ? getMovieBoxCover(effectiveMbItem) : "")
@@ -402,31 +393,23 @@ export default function Watch() {
                 <Play className="w-5 h-5 text-green-400" />
                 Stream Now
               </h2>
-              <div className="flex items-center gap-2">
-                {!isMovieBox && (
-                  <Button
-                    size="sm"
-                    variant={activeStream === "vidsrc" ? "default" : "ghost"}
-                    onClick={() => { setActiveStream("vidsrc"); setIsStopped(false); }}
-                    className={`font-mono text-xs ${activeStream === "vidsrc" ? "bg-green-600 text-white" : "text-gray-400"}`}
-                    data-testid="button-source-vidsrc"
-                  >
-                    <Monitor className="w-3 h-3 mr-1" />
-                    Server 1
-                  </Button>
-                )}
-                {(movieboxStreamUrl || isMovieBox) && (
-                  <Button
-                    size="sm"
-                    variant={activeStream === "moviebox" ? "default" : "ghost"}
-                    onClick={() => { setActiveStream("moviebox"); setIsStopped(false); }}
-                    className={`font-mono text-xs ${activeStream === "moviebox" ? "bg-emerald-600 text-white" : "text-gray-400"}`}
-                    data-testid="button-source-moviebox"
-                  >
-                    <Tv2 className="w-3 h-3 mr-1" />
-                    Server 2
-                  </Button>
-                )}
+              <div className="flex items-center gap-1 flex-wrap">
+                {STREAM_SERVERS.map((server, idx) => {
+                  const Icon = server.icon;
+                  return (
+                    <Button
+                      key={server.id}
+                      size="sm"
+                      variant={activeServer === server.id ? "default" : "ghost"}
+                      onClick={() => { setActiveServer(server.id); setIsStopped(false); }}
+                      className={`font-mono text-xs ${activeServer === server.id ? "bg-green-600 text-white" : "text-gray-400"}`}
+                      data-testid={`button-server-${server.id}`}
+                    >
+                      <Icon className="w-3 h-3 mr-1" />
+                      Server {idx + 1}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
 
@@ -434,7 +417,7 @@ export default function Watch() {
               <div className="w-full aspect-video rounded-t-xl border border-green-500/20 border-b-0 bg-black flex items-center justify-center">
                 <div className="text-center">
                   <Loader2 className="w-10 h-10 text-green-500/30 mx-auto mb-3 animate-spin" />
-                  <p className="text-sm font-mono text-gray-500">Loading stream source...</p>
+                  <p className="text-sm font-mono text-gray-500">{isMovieBox ? "Searching for stream source..." : "Loading stream source..."}</p>
                   <p className="text-xs font-mono text-gray-600 mt-1">Try switching servers above if playback doesn't start</p>
                 </div>
               </div>

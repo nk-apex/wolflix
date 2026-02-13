@@ -51,11 +51,12 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 
 ## Streaming
 - Clicking any content card navigates to `/watch/:type/:id`
-- Dual-source streaming: VidSrc (Server 1) for TMDB items, MovieBox (Server 2) for MovieBox items
-- VidSrc URL format: `https://vidsrc.icu/embed/{movie|tv}/{tmdb_id}`
-- MovieBox URL format: `{stream-domain}/play/{detailPath}` (domain from `/media-player/get-domain`)
-- Server toggle buttons allow switching between VidSrc and MovieBox streams
-- For TMDB items, MovieBox detailPath is recovered by searching MovieBox API by title
+- Multi-server streaming with 4 embed sources (all use TMDB IDs):
+  - Server 1: VidSrc (`vidsrc.icu/embed/{movie|tv}/{tmdb_id}`)
+  - Server 2: MultiEmbed (`multiembed.mov/?video_id={tmdb_id}&tmdb=1`)
+  - Server 3: SuperEmbed (`getsuperembed.link/?video_id={tmdb_id}&tmdb=1`)
+  - Server 4: VidSrc.me (`vidsrc.net/embed/{movie|tv}/{tmdb_id}`)
+- For MovieBox items: searches TMDB by title to find the TMDB ID, then uses same embed servers
 - MovieBox items navigate with `?source=moviebox` and store item data in sessionStorage
 - Recovery mechanism: When sessionStorage clears after refresh, searches MovieBox by title/subjectId to recover detailPath
 - Fullscreen toggle button on the player using browser Fullscreen API
