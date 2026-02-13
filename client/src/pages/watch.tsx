@@ -1,11 +1,13 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize } from "lucide-react";
+import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, Globe, Subtitles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
+import { MovieBoxCard } from "@/components/moviebox-card";
 import { getImageUrl } from "@/lib/tmdb";
+import { type MovieBoxItem, getMovieBoxCover, getMovieBoxYear, getMovieBoxRating } from "@/lib/moviebox";
 
 interface ArslanSearchResult {
   title: string;
@@ -54,8 +56,23 @@ export default function Watch() {
   const type = params?.type || "movie";
   const id = params?.id || "";
 
+  const urlParams = new URLSearchParams(window.location.search);
+  const source = urlParams.get("source") || "tmdb";
+  const isMovieBox = source === "moviebox";
+
+  const mbItemFromStorage = useMemo(() => {
+    if (!isMovieBox || !id) return null;
+    try {
+      const stored = sessionStorage.getItem(`mb_item_${id}`);
+      if (stored) return JSON.parse(stored) as MovieBoxItem;
+    } catch {}
+    return null;
+  }, [id, isMovieBox]);
+
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
-  const [streamServer, setStreamServer] = useState<"multiembed" | "autoembed" | "2embed">("multiembed");
+  const [streamServer, setStreamServer] = useState<"multiembed" | "autoembed" | "2embed" | "moviebox">(
+    isMovieBox ? "moviebox" : "multiembed"
+  );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const playerContainerRef = useRef<HTMLDivElement>(null);
 
@@ -76,10 +93,28 @@ export default function Watch() {
 
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBDetail>({
     queryKey: ["/api/tmdb", type, id],
-    enabled: !!id,
+    enabled: !!id && !isMovieBox,
   });
 
-  const title = tmdbData?.title || tmdbData?.name || "";
+  const { data: streamDomain } = useQuery<{ code: number; data: string }>({
+    queryKey: ["/api/wolfmovieapi/stream-domain"],
+  });
+
+  const { data: mbDetailRec } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
+    queryKey: ["/api/wolfmovieapi/detail", id],
+    enabled: !!id && isMovieBox,
+    queryFn: async () => {
+      const res = await fetch(`/api/wolfmovieapi/detail/${id}`);
+      if (!res.ok) throw new Error("Detail failed");
+      return res.json();
+    },
+  });
+
+  const mbItem = mbItemFromStorage;
+
+  const title = isMovieBox
+    ? (mbItem?.title || "")
+    : (tmdbData?.title || tmdbData?.name || "");
 
   const { data: arslanSearch, isLoading: arslanSearching } = useQuery<{ result?: { data?: ArslanSearchResult[] } }>({
     queryKey: ["/api/arslan/search", title],
@@ -107,17 +142,49 @@ export default function Watch() {
   const movieDetail = arslanDetail?.result?.data;
   const dlLinks = movieDetail?.dl_links || [];
 
+  const movieboxDomain = streamDomain?.data?.replace(/\/$/, "") || "https://123movienow.cc";
+
   const streamUrls: Record<string, string> = {
     multiembed: `https://multiembed.mov/directstream.php?video_id=${id}&tmdb=1`,
     autoembed: type === "movie" ? `https://autoembed.co/movie/tmdb/${id}` : `https://autoembed.co/tv/tmdb/${id}`,
     "2embed": `https://www.2embed.cc/embed/${id}`,
+    moviebox: `${movieboxDomain}/play/${id}`,
   };
   const streamUrl = streamUrls[streamServer];
 
-  const backdropUrl = getImageUrl(tmdbData?.backdrop_path || null, "w1280");
-  const posterUrl = getImageUrl(tmdbData?.poster_path || null, "w500");
+  const posterUrl = isMovieBox
+    ? (mbItem ? getMovieBoxCover(mbItem) : "")
+    : getImageUrl(tmdbData?.poster_path || null, "w500");
 
-  if (tmdbLoading) {
+  const backdropUrl = isMovieBox
+    ? (mbItem?.stills?.[0]?.url || "")
+    : getImageUrl(tmdbData?.backdrop_path || null, "w1280");
+
+  const rating = isMovieBox
+    ? (mbItem ? parseFloat(getMovieBoxRating(mbItem)) : 0)
+    : (tmdbData?.vote_average || 0);
+
+  const year = isMovieBox
+    ? (mbItem ? getMovieBoxYear(mbItem) : "")
+    : ((tmdbData?.release_date || tmdbData?.first_air_date)?.split("-")[0] || "");
+
+  const genre = isMovieBox
+    ? (mbItem?.genre || "")
+    : "";
+
+  const description = isMovieBox
+    ? (mbItem?.description || "")
+    : (tmdbData?.overview || "");
+
+  const duration = isMovieBox
+    ? (mbItem?.duration ? Math.round(mbItem.duration / 60) : 0)
+    : (tmdbData?.runtime || 0);
+
+  const country = isMovieBox ? (mbItem?.countryName || "") : "";
+
+  const mbRelated = mbDetailRec?.data?.items || [];
+
+  if (tmdbLoading && !isMovieBox) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
@@ -128,9 +195,9 @@ export default function Watch() {
   return (
     <div className="min-h-screen bg-black">
       <div className="relative">
-        {backdropUrl && (
+        {(backdropUrl || posterUrl) && (
           <div className="absolute inset-0 h-[500px]">
-            <img src={backdropUrl} alt="" className="w-full h-full object-cover" />
+            <img src={backdropUrl || posterUrl} alt="" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black" />
           </div>
         )}
@@ -157,35 +224,46 @@ export default function Watch() {
             )}
 
             <div className="flex-1 min-w-0">
-              <h1 className="text-3xl lg:text-4xl font-display font-bold text-white mb-3" data-testid="text-watch-title">{title}</h1>
+              <h1 className="text-3xl lg:text-4xl font-display font-bold text-white mb-3" data-testid="text-watch-title">{title || `Content #${id}`}</h1>
 
               <div className="flex flex-wrap items-center gap-3 mb-4">
-                {tmdbData?.vote_average && tmdbData.vote_average > 0 && (
+                {rating > 0 && (
                   <span className="flex items-center gap-1 text-sm font-mono text-green-400" data-testid="text-rating">
                     <Star className="w-4 h-4 fill-green-400" />
-                    {tmdbData.vote_average.toFixed(1)}
+                    {rating.toFixed(1)}
                   </span>
                 )}
-                {(tmdbData?.release_date || tmdbData?.first_air_date) && (
+                {year && (
                   <span className="flex items-center gap-1 text-sm font-mono text-gray-400" data-testid="text-year">
                     <Calendar className="w-4 h-4" />
-                    {(tmdbData.release_date || tmdbData.first_air_date)?.split("-")[0]}
+                    {year}
                   </span>
                 )}
-                {tmdbData?.runtime && (
+                {duration > 0 && (
                   <span className="flex items-center gap-1 text-sm font-mono text-gray-400" data-testid="text-runtime">
                     <Clock className="w-4 h-4" />
-                    {tmdbData.runtime} min
+                    {duration} min
                   </span>
                 )}
-                {tmdbData?.status && (
+                {!isMovieBox && tmdbData?.status && (
                   <Badge variant="outline" className="text-green-400 border-green-500/20 bg-green-500/10 font-mono" data-testid="text-status">
                     {tmdbData.status}
                   </Badge>
                 )}
+                {isMovieBox && (
+                  <Badge variant="outline" className="text-emerald-400 border-emerald-500/20 bg-emerald-500/10 font-mono" data-testid="badge-source-moviebox">
+                    <Globe className="w-3 h-3 mr-1" />
+                    MovieBox
+                  </Badge>
+                )}
+                {country && (
+                  <Badge variant="outline" className="text-gray-300 border-gray-500/20 bg-gray-500/10 font-mono" data-testid="badge-country">
+                    {country}
+                  </Badge>
+                )}
               </div>
 
-              {tmdbData?.genres && tmdbData.genres.length > 0 && (
+              {!isMovieBox && tmdbData?.genres && tmdbData.genres.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4">
                   {tmdbData.genres.map((g) => (
                     <Badge key={g.id} variant="outline" className="text-green-300 border-green-500/15 bg-green-500/10 font-mono" data-testid={`badge-genre-${g.id}`}>
@@ -195,14 +273,42 @@ export default function Watch() {
                 </div>
               )}
 
-              <p className="text-sm text-gray-300 leading-relaxed mb-6 max-w-2xl" data-testid="text-watch-overview">
-                {tmdbData?.overview}
-              </p>
+              {isMovieBox && genre && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {genre.split(",").map((g) => (
+                    <Badge key={g.trim()} variant="outline" className="text-green-300 border-green-500/15 bg-green-500/10 font-mono" data-testid={`badge-genre-mb-${g.trim()}`}>
+                      {g.trim()}
+                    </Badge>
+                  ))}
+                </div>
+              )}
 
-              {tmdbData?.number_of_seasons && (
+              {description && (
+                <p className="text-sm text-gray-300 leading-relaxed mb-6 max-w-2xl" data-testid="text-watch-overview">
+                  {description}
+                </p>
+              )}
+
+              {!isMovieBox && tmdbData?.number_of_seasons && (
                 <p className="text-xs font-mono text-gray-500 mb-4" data-testid="text-seasons">
                   {tmdbData.number_of_seasons} Seasons / {tmdbData.number_of_episodes} Episodes
                 </p>
+              )}
+
+              {isMovieBox && mbItem?.season && mbItem.season.length > 0 && (
+                <p className="text-xs font-mono text-gray-500 mb-4" data-testid="text-seasons-mb">
+                  {mbItem.season.length} Season{mbItem.season.length > 1 ? "s" : ""}
+                </p>
+              )}
+
+              {isMovieBox && mbItem?.staffList && mbItem.staffList.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  {mbItem.staffList.slice(0, 5).map((staff) => (
+                    <span key={staff.staffId} className="text-xs font-mono text-gray-500">
+                      {staff.staffName} ({staff.staffRole})
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -213,7 +319,7 @@ export default function Watch() {
                 <Play className="w-5 h-5 text-green-400" />
                 Stream Now
               </h2>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-mono text-gray-500" data-testid="text-server-label">Server:</span>
                 <Button
                   size="sm"
@@ -241,6 +347,15 @@ export default function Watch() {
                   data-testid="button-server-2embed"
                 >
                   Server 3
+                </Button>
+                <Button
+                  size="sm"
+                  variant={streamServer === "moviebox" ? "default" : "ghost"}
+                  onClick={() => setStreamServer("moviebox")}
+                  className={`text-xs font-mono ${streamServer === "moviebox" ? "bg-emerald-500 text-black" : "text-emerald-400"}`}
+                  data-testid="button-server-moviebox"
+                >
+                  MovieBox
                 </Button>
               </div>
             </div>
@@ -336,6 +451,20 @@ export default function Watch() {
               </div>
             )}
           </GlassPanel>
+
+          {mbRelated.length > 0 && (
+            <GlassPanel className="mb-8">
+              <h2 className="text-lg font-display font-bold text-white flex items-center gap-2 mb-4" data-testid="text-related-heading">
+                <Subtitles className="w-5 h-5 text-green-400" />
+                Related Content
+              </h2>
+              <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                {mbRelated.map((item: MovieBoxItem) => (
+                  <MovieBoxCard key={item.subjectId} item={item} />
+                ))}
+              </div>
+            </GlassPanel>
+          )}
         </div>
       </div>
     </div>

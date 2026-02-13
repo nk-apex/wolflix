@@ -5,6 +5,60 @@ const TMDB_KEY = process.env.TMDB_API_KEY || "";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const ARSLAN_BASE = "https://arslan-apis.vercel.app/movie";
 
+const MOVIEBOX_API = "https://h5-api.aoneroom.com/wefeed-h5api-bff";
+
+let movieboxToken: string | null = null;
+let tokenExpiry = 0;
+
+async function getMovieboxToken(): Promise<string> {
+  if (movieboxToken && Date.now() < tokenExpiry) return movieboxToken;
+  const res = await fetch(
+    `${MOVIEBOX_API}/web/get-page-tdk?page_key=home&site_key=moviebox`,
+    { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } }
+  );
+  const xUser = res.headers.get("x-user");
+  if (xUser) {
+    const parsed = JSON.parse(xUser);
+    movieboxToken = parsed.token;
+    tokenExpiry = Date.now() + 3600000;
+    return movieboxToken!;
+  }
+  throw new Error("Failed to obtain MovieBox token");
+}
+
+async function movieboxGet(path: string): Promise<any> {
+  const token = await getMovieboxToken();
+  const url = `${MOVIEBOX_API}${path}`;
+  const res = await fetch(url, {
+    headers: {
+      "Accept": "application/json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "X-Client-Token": token,
+      "X-Request-Lang": "en",
+    },
+  });
+  if (!res.ok) throw new Error(`MovieBox API error: ${res.status}`);
+  return res.json();
+}
+
+async function movieboxPost(path: string, body: any): Promise<any> {
+  const token = await getMovieboxToken();
+  const url = `${MOVIEBOX_API}${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "X-Client-Token": token,
+      "X-Request-Lang": "en",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`MovieBox API error: ${res.status}`);
+  return res.json();
+}
+
 async function tmdbFetch(path: string): Promise<any> {
   const separator = path.includes("?") ? "&" : "?";
   const url = `${TMDB_BASE}${path}${separator}api_key=${TMDB_KEY}`;
@@ -24,6 +78,118 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // =============================================
+  // WolfMovieAPI - MovieBox Powered Endpoints
+  // =============================================
+
+  app.get("/api/wolfmovieapi/home", async (_req, res) => {
+    try {
+      const data = await movieboxGet("/home");
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/wolfmovieapi/search", async (req, res) => {
+    try {
+      const keyword = req.query.keyword as string;
+      const page = parseInt(req.query.page as string) || 1;
+      const perPage = parseInt(req.query.perPage as string) || 20;
+      const subjectType = req.query.type as string || "";
+      if (!keyword) return res.status(400).json({ error: "keyword query required" });
+      const data = await movieboxPost("/subject/search", {
+        keyword,
+        page,
+        perPage,
+        subjectType: subjectType ? parseInt(subjectType) : undefined,
+      });
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/wolfmovieapi/search-suggest", async (req, res) => {
+    try {
+      const keyword = req.query.keyword as string;
+      if (!keyword) return res.status(400).json({ error: "keyword query required" });
+      const data = await movieboxPost("/subject/search-suggest", {
+        keyword,
+        perPage: 10,
+      });
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/wolfmovieapi/trending", async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const perPage = parseInt(req.query.perPage as string) || 20;
+      const tabId = req.query.tabId as string || "";
+      const data = await movieboxGet(`/subject/trending?tabId=${tabId}&page=${page}&perPage=${perPage}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/wolfmovieapi/filter", async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const perPage = parseInt(req.query.perPage as string) || 20;
+      const type = parseInt(req.query.type as string) || 1;
+      const genre = req.query.genre as string || "";
+      const country = req.query.country as string || "";
+      const year = req.query.year as string || "";
+      const sort = req.query.sort as string || "";
+      const body: any = { type, page, perPage };
+      if (genre) body.genre = genre;
+      if (country) body.country = country;
+      if (year) body.year = year;
+      if (sort) body.sort = sort;
+      const data = await movieboxPost("/subject/filter", body);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/wolfmovieapi/detail/:subjectId", async (req, res) => {
+    try {
+      const { subjectId } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const data = await movieboxGet(`/subject/detail-rec?subjectId=${subjectId}&page=${page}&perPage=12`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/wolfmovieapi/stream-domain", async (_req, res) => {
+    try {
+      const data = await movieboxGet("/media-player/get-domain");
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/wolfmovieapi/everyone-search", async (req, res) => {
+    try {
+      const data = await movieboxGet("/subject/everyone-search");
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // =============================================
+  // TMDB Endpoints (kept for compatibility)
+  // =============================================
 
   app.get("/api/tmdb/trending", async (_req, res) => {
     try {
@@ -213,6 +379,10 @@ export async function registerRoutes(
       res.status(500).json({ error: e.message });
     }
   });
+
+  // =============================================
+  // Arslan API Endpoints (kept for compatibility)
+  // =============================================
 
   app.get("/api/arslan/search", async (req, res) => {
     try {

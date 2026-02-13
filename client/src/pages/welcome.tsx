@@ -3,6 +3,8 @@ import { GlassCard, GlassPanel } from "@/components/glass-card";
 import { useQuery } from "@tanstack/react-query";
 import { type TMDBMovie, getImageUrl } from "@/lib/tmdb";
 import { ContentCard } from "@/components/content-card";
+import { MovieBoxRow } from "@/components/moviebox-row";
+import { type MovieBoxItem, type MovieBoxHomeResponse, type MovieBoxTrendingResponse } from "@/lib/moviebox";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -24,8 +26,22 @@ export default function Welcome() {
     queryKey: ["/api/tmdb/trending"],
   });
 
+  const { data: mbTrending, isLoading: mbTrendingLoading } = useQuery<MovieBoxTrendingResponse>({
+    queryKey: ["/api/wolfmovieapi/trending"],
+  });
+
+  const { data: mbHome, isLoading: mbHomeLoading } = useQuery<MovieBoxHomeResponse>({
+    queryKey: ["/api/wolfmovieapi/home"],
+  });
+
   const featured = trending?.results?.[0];
   const trendingItems = trending?.results?.slice(1, 9) || [];
+
+  const mbTrendingItems = mbTrending?.data?.subjectList || [];
+
+  const homeCategories = (mbHome?.data?.operatingList || [])
+    .filter(m => m.type === "SUBJECTS_MOVIE" && m.subjects && m.subjects.length > 0)
+    .slice(0, 4);
 
   return (
     <div className="min-h-screen">
@@ -106,13 +122,14 @@ export default function Welcome() {
                   {featured.overview}
                 </p>
                 <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={() => window.open(`https://vidsrc.cc/v2/embed/movie/${featured.id}`, "_blank")}
-                    className="flex items-center gap-2 rounded-xl bg-green-500 px-5 py-2 font-mono text-sm font-bold text-black transition-all hover:bg-green-400"
-                    data-testid="button-stream-featured"
-                  >
-                    <Play className="w-4 h-4" /> Stream Now
-                  </button>
+                  <Link href={`/watch/movie/${featured.id}`}>
+                    <button
+                      className="flex items-center gap-2 rounded-xl bg-green-500 px-5 py-2 font-mono text-sm font-bold text-black transition-all hover:bg-green-400"
+                      data-testid="button-stream-featured"
+                    >
+                      <Play className="w-4 h-4" /> Stream Now
+                    </button>
+                  </Link>
                 </div>
               </div>
             </div>
@@ -137,6 +154,23 @@ export default function Welcome() {
                 ))}
           </div>
         </div>
+
+        <MovieBoxRow
+          title="MovieBox Trending"
+          icon={<Zap className="w-5 h-5" />}
+          items={mbTrendingItems}
+          isLoading={mbTrendingLoading}
+        />
+
+        {homeCategories.map((cat) => (
+          <MovieBoxRow
+            key={cat.title}
+            title={cat.title}
+            icon={<Film className="w-5 h-5" />}
+            items={cat.subjects}
+            isLoading={mbHomeLoading}
+          />
+        ))}
       </div>
     </div>
   );

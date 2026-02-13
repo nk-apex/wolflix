@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search as SearchIcon, X, Film, Tv } from "lucide-react";
+import { Search as SearchIcon, X, Film, Tv, Zap } from "lucide-react";
 import { ContentCard } from "@/components/content-card";
+import { MovieBoxCard } from "@/components/moviebox-card";
 import { type TMDBMovie } from "@/lib/tmdb";
+import { type MovieBoxSearchResponse, type MovieBoxItem } from "@/lib/moviebox";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface TMDBRes { results: TMDBMovie[] }
@@ -10,8 +12,9 @@ interface TMDBRes { results: TMDBMovie[] }
 export default function Search() {
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState<"all" | "tmdb" | "moviebox">("all");
 
-  const { data, isLoading } = useQuery<TMDBRes>({
+  const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBRes>({
     queryKey: ["/api/tmdb/search", searchTerm],
     enabled: searchTerm.length > 1,
     queryFn: async () => {
@@ -21,12 +24,27 @@ export default function Search() {
     },
   });
 
+  const { data: mbData, isLoading: mbLoading } = useQuery<MovieBoxSearchResponse>({
+    queryKey: ["/api/wolfmovieapi/search", searchTerm],
+    enabled: searchTerm.length > 1,
+    queryFn: async () => {
+      const res = await fetch(`/api/wolfmovieapi/search?keyword=${encodeURIComponent(searchTerm)}&page=1&perPage=30`);
+      if (!res.ok) throw new Error("MovieBox search failed");
+      return res.json();
+    },
+  });
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setSearchTerm(query.trim());
   };
 
-  const results = data?.results || [];
+  const tmdbResults = tmdbData?.results || [];
+  const mbResults = mbData?.data?.items || [];
+  const isLoading = tmdbLoading || mbLoading;
+
+  const showTmdb = activeTab === "all" || activeTab === "tmdb";
+  const showMb = activeTab === "all" || activeTab === "moviebox";
 
   return (
     <div className="min-h-screen px-6 py-8 max-w-6xl mx-auto">
@@ -35,7 +53,7 @@ export default function Search() {
         <h1 className="text-3xl font-display font-bold text-white mt-1" data-testid="text-search-heading">Search</h1>
       </div>
 
-      <form onSubmit={handleSearch} className="mb-8">
+      <form onSubmit={handleSearch} className="mb-6">
         <div className="relative">
           <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500/50" />
           <input
@@ -59,6 +77,44 @@ export default function Search() {
         </div>
       </form>
 
+      {searchTerm && (
+        <div className="flex items-center gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab("all")}
+            className={`px-4 py-1.5 rounded-full text-xs font-mono transition-all ${
+              activeTab === "all"
+                ? "bg-green-500 text-black font-bold"
+                : "bg-green-500/10 text-green-400 border border-green-500/20"
+            }`}
+            data-testid="button-tab-all"
+          >
+            All
+          </button>
+          <button
+            onClick={() => setActiveTab("tmdb")}
+            className={`px-4 py-1.5 rounded-full text-xs font-mono transition-all ${
+              activeTab === "tmdb"
+                ? "bg-green-500 text-black font-bold"
+                : "bg-green-500/10 text-green-400 border border-green-500/20"
+            }`}
+            data-testid="button-tab-tmdb"
+          >
+            TMDB ({tmdbResults.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("moviebox")}
+            className={`px-4 py-1.5 rounded-full text-xs font-mono transition-all ${
+              activeTab === "moviebox"
+                ? "bg-green-500 text-black font-bold"
+                : "bg-green-500/10 text-green-400 border border-green-500/20"
+            }`}
+            data-testid="button-tab-moviebox"
+          >
+            MovieBox ({mbResults.length})
+          </button>
+        </div>
+      )}
+
       {isLoading && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {Array.from({ length: 10 }).map((_, i) => (
@@ -70,11 +126,16 @@ export default function Search() {
         </div>
       )}
 
-      {!isLoading && results.length > 0 && (
-        <div>
-          <p className="text-xs font-mono text-gray-500 mb-4">{results.length} results found</p>
+      {!isLoading && searchTerm && showTmdb && tmdbResults.length > 0 && (
+        <div className="mb-8">
+          {activeTab === "all" && (
+            <div className="flex items-center gap-2 mb-4">
+              <Film className="w-4 h-4 text-green-400" />
+              <h3 className="text-sm font-mono font-bold text-gray-400 uppercase tracking-wider">TMDB Results</h3>
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {results.filter(r => r.poster_path).map((item) => (
+            {tmdbResults.filter(r => r.poster_path).map((item) => (
               <ContentCard
                 key={item.id}
                 item={item}
@@ -85,7 +146,23 @@ export default function Search() {
         </div>
       )}
 
-      {!isLoading && searchTerm && results.length === 0 && (
+      {!isLoading && searchTerm && showMb && mbResults.length > 0 && (
+        <div className="mb-8">
+          {activeTab === "all" && (
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="w-4 h-4 text-green-400" />
+              <h3 className="text-sm font-mono font-bold text-gray-400 uppercase tracking-wider">MovieBox Results</h3>
+            </div>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {mbResults.filter((r: MovieBoxItem) => r.cover?.url).map((item: MovieBoxItem) => (
+              <MovieBoxCard key={item.subjectId} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isLoading && searchTerm && tmdbResults.length === 0 && mbResults.length === 0 && (
         <div className="text-center py-20">
           <SearchIcon className="w-12 h-12 text-green-500/20 mx-auto mb-4" />
           <p className="text-gray-500 font-mono text-sm">No results found for "{searchTerm}"</p>
@@ -99,6 +176,7 @@ export default function Search() {
             <Tv className="w-8 h-8 text-green-500/20" />
           </div>
           <p className="text-gray-500 font-mono text-sm">Search for movies, TV shows, and more</p>
+          <p className="text-gray-600 font-mono text-xs mt-1">Results from TMDB and MovieBox</p>
         </div>
       )}
     </div>
