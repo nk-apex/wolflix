@@ -25,6 +25,18 @@ interface TMDBDetail {
   imdb_id?: string;
 }
 
+interface SeasonDetail {
+  season_number: number;
+  episodes: {
+    episode_number: number;
+    name: string;
+    overview: string;
+    still_path: string | null;
+    air_date: string | null;
+    runtime: number | null;
+  }[];
+}
+
 function getPlayerUrl(contentId: string, contentType: string, season?: number, episode?: number): string {
   if (!contentId) return "";
   if (contentType === "tv") {
@@ -81,6 +93,25 @@ export default function Watch() {
     queryKey: [`/api/tmdb/${type}/${id}/external_ids`],
     enabled: !!id && !isZone && type === "tv",
   });
+
+  const tvId = useMemo(() => {
+    if (type !== "tv") return null;
+    if (!isZone) return id;
+    if (tmdbData?.id) return String(tmdbData.id);
+    return null;
+  }, [type, isZone, id, tmdbData]);
+
+  const { data: seasonData } = useQuery<SeasonDetail>({
+    queryKey: ["/api/tmdb/tv", tvId, "season", selectedSeason],
+    queryFn: async () => {
+      const res = await fetch(`/api/tmdb/tv/${tvId}/season/${selectedSeason}`);
+      if (!res.ok) throw new Error("Failed to fetch season");
+      return res.json();
+    },
+    enabled: !!tvId && type === "tv",
+  });
+
+  const episodeCount = seasonData?.episodes?.length || 0;
 
   const imdbId = useMemo(() => {
     if (isZone && id.startsWith("tt")) return id;
@@ -209,46 +240,81 @@ export default function Watch() {
 
           {type === "tv" && seasonCount > 0 && (
             <GlassPanel className="mb-6">
-              <h3 className="text-sm font-display font-bold text-white mb-3 flex items-center gap-2" data-testid="text-season-selector">
+              <h3 className="text-sm font-display font-bold text-white mb-4 flex items-center gap-2" data-testid="text-season-selector">
                 <Tv2 className="w-4 h-4 text-green-400" />
-                Season & Episode
+                Seasons & Episodes
               </h3>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-gray-400">Season:</span>
-                  <div className="flex gap-1 flex-wrap">
-                    {Array.from({ length: seasonCount }, (_, i) => (
-                      <Button
-                        key={i}
-                        size="sm"
-                        variant={selectedSeason === (i + 1) ? "default" : "ghost"}
-                        onClick={() => { setSelectedSeason(i + 1); setSelectedEpisode(1); }}
-                        className={`font-mono text-xs ${selectedSeason === (i + 1) ? "bg-green-600 text-white" : "text-gray-400"}`}
-                        data-testid={`button-season-${i + 1}`}
-                      >
-                        S{i + 1}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-gray-400">Episode:</span>
-                  <div className="flex gap-1 flex-wrap">
-                    {Array.from({ length: 20 }, (_, i) => i + 1).map(ep => (
-                      <Button
-                        key={ep}
-                        size="sm"
-                        variant={selectedEpisode === ep ? "default" : "ghost"}
-                        onClick={() => { setSelectedEpisode(ep); }}
-                        className={`font-mono text-xs ${selectedEpisode === ep ? "bg-green-600 text-white" : "text-gray-400"}`}
-                        data-testid={`button-episode-${ep}`}
-                      >
-                        E{ep}
-                      </Button>
-                    ))}
-                  </div>
+
+              <div className="mb-4">
+                <span className="text-xs font-mono text-gray-400 mr-3">Season:</span>
+                <div className="flex gap-1 flex-wrap mt-1">
+                  {Array.from({ length: seasonCount }, (_, i) => (
+                    <Button
+                      key={i}
+                      size="sm"
+                      variant={selectedSeason === (i + 1) ? "default" : "ghost"}
+                      onClick={() => { setSelectedSeason(i + 1); setSelectedEpisode(1); }}
+                      className={`font-mono text-xs ${selectedSeason === (i + 1) ? "bg-green-600 text-white" : "text-gray-400"}`}
+                      data-testid={`button-season-${i + 1}`}
+                    >
+                      S{i + 1}
+                    </Button>
+                  ))}
                 </div>
               </div>
+
+              {episodeCount > 0 && (
+                <div>
+                  <span className="text-xs font-mono text-gray-400 mb-1 block">
+                    Episodes ({episodeCount}):
+                  </span>
+                  <div className="grid gap-2 mt-2 max-h-[400px] overflow-y-auto pr-1">
+                    {seasonData!.episodes.map((ep) => (
+                      <button
+                        key={ep.episode_number}
+                        onClick={() => setSelectedEpisode(ep.episode_number)}
+                        className={`flex items-start gap-3 p-3 rounded-xl text-left transition-all ${
+                          selectedEpisode === ep.episode_number
+                            ? "bg-green-500/15 border border-green-500/30"
+                            : "bg-black/30 border border-green-500/5 hover:border-green-500/15"
+                        }`}
+                        data-testid={`button-episode-${ep.episode_number}`}
+                      >
+                        <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-mono text-xs font-bold ${
+                          selectedEpisode === ep.episode_number
+                            ? "bg-green-500 text-black"
+                            : "bg-green-500/10 text-green-400"
+                        }`}>
+                          {ep.episode_number}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-mono font-medium truncate ${
+                            selectedEpisode === ep.episode_number ? "text-green-300" : "text-white"
+                          }`}>
+                            {ep.name || `Episode ${ep.episode_number}`}
+                          </p>
+                          {ep.overview && (
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{ep.overview}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {ep.runtime && (
+                              <span className="text-[10px] font-mono text-gray-600">{ep.runtime}m</span>
+                            )}
+                            {ep.air_date && (
+                              <span className="text-[10px] font-mono text-gray-600">{ep.air_date}</span>
+                            )}
+                          </div>
+                        </div>
+                        {selectedEpisode === ep.episode_number && (
+                          <div className="flex-shrink-0">
+                            <Play className="w-4 h-4 text-green-400 fill-green-400" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </GlassPanel>
           )}
 
@@ -257,6 +323,11 @@ export default function Watch() {
               <h2 className="text-lg font-display font-bold text-white flex items-center gap-2" data-testid="text-stream-heading">
                 <Play className="w-5 h-5 text-green-400" />
                 Stream Now
+                {type === "tv" && (
+                  <span className="text-xs font-mono text-gray-500 ml-2">
+                    S{selectedSeason} E{selectedEpisode}
+                  </span>
+                )}
               </h2>
             </div>
 
@@ -267,7 +338,6 @@ export default function Watch() {
                   <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
                     No streaming source found for this title
                   </p>
-                  <p className="text-xs font-mono text-gray-600 mt-1">IMDB ID not available for this content</p>
                 </div>
               </div>
             ) : (
@@ -278,9 +348,9 @@ export default function Watch() {
                   src={playerUrl}
                   className="absolute inset-0 w-full h-full"
                   allowFullScreen
-                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                  allow="autoplay; fullscreen; encrypted-media"
                   referrerPolicy="origin"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-top-navigation"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
                   data-testid="iframe-player"
                 />
               </div>
@@ -290,6 +360,7 @@ export default function Watch() {
               <div className="flex-1">
                 <p className="text-xs font-mono text-gray-400 truncate" data-testid="text-now-playing">
                   {title || "Now Playing"}
+                  {type === "tv" && ` - S${selectedSeason}E${selectedEpisode}`}
                 </p>
               </div>
 

@@ -402,6 +402,15 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/tmdb/tv/:id/season/:season", async (req, res) => {
+    try {
+      const data = await tmdbFetch(`/tv/${req.params.id}/season/${req.params.season}`);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // =============================================
   // IMDB API Endpoints (via imdbapi.dev)
   // =============================================

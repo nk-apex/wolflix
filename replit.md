@@ -1,12 +1,12 @@
 # WOLFLIX - Streaming Platform
 
 ## Overview
-WOLFLIX is a streaming platform built with React + Vite on the frontend and Express on the backend. It uses the TMDB API for movie/TV metadata and BWM (zone.bwmxmd.co.ke) as the sole streaming source via iframe embedding. Search uses the IMDB API (api.imdbapi.dev) for BWM-compatible results. The app features a dark theme with neon green (#00ff00) accents and glass-morphism card effects.
+WOLFLIX is a streaming platform built with React + Vite on the frontend and Express on the backend. It uses the TMDB API for movie/TV metadata and AutoEmbed (player.autoembed.cc) as the sole streaming source via iframe embedding. Search combines IMDB API (api.imdbapi.dev) and TMDB results into unified Wolflix Results. The app features a dark theme with neon green (#00ff00) accents and glass-morphism card effects. A global search bar is in the header on every page.
 
 ## Architecture
 - **Frontend**: React + TypeScript + Vite, TailwindCSS, Shadcn UI
 - **Backend**: Express.js proxying TMDB API, IMDB API, and Arslan API requests
-- **Streaming**: BWM player (zone.bwmxmd.co.ke) embedded via iframe using IMDB IDs
+- **Streaming**: AutoEmbed player (player.autoembed.cc) embedded via iframe using IMDB/TMDB IDs
 - **Styling**: Dark mode with neon green accents, glass card effects, font-display (Oxanium), font-mono
 - **Routing**: wouter for client-side routing
 - **Data Fetching**: @tanstack/react-query
@@ -20,10 +20,10 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `/novel` - Book adaptations, literary classics, fantasy
 - `/most-viewed` - Top 10 trending, popular, all-time favorites
 - `/application` - Download apps info
-- `/search` - Search movies & TV shows (tabs: All, BWM/IMDB results, TMDB results)
+- `/search` - Search movies & TV shows (unified Wolflix Results combining IMDB + TMDB)
 - `/settings` - User preferences
 - `/profile` - User profile
-- `/watch/:type/:id` - Watch page with BWM iframe player, movie details, download links
+- `/watch/:type/:id` - Watch page with AutoEmbed iframe player, movie details, download links
 
 ## API Routes
 ### TMDB API (content browsing) - `/api/tmdb/`
@@ -58,7 +58,8 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
   - BWM/Zone search items: Navigate to `/watch/{type}/{imdb_id}?source=zone&title={title}`, IMDB ID used directly
   - TMDB API resolves IMDB IDs automatically (e.g., `/api/tmdb/movie/tt1234567` works)
 - For TV shows: External IDs endpoint fetches IMDB ID since it's not in the main TV detail response
-- Season/episode selector available for TV content (up to 20 episodes shown)
+- Season details fetched from TMDB `/api/tmdb/tv/{id}/season/{season}` for accurate episode counts and names
+- Season & episode selector with full episode listing (name, overview, runtime, air date)
 - Fullscreen toggle using browser Fullscreen API
 - Download links fetched from Arslan API by searching movie title
 - HTML entity decoding for download URLs using textarea helper
