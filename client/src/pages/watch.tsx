@@ -5,37 +5,7 @@ import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
-import { getImageUrl } from "@/lib/tmdb";
-
-interface TMDBDetail {
-  id: number;
-  title?: string;
-  name?: string;
-  overview: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  vote_average: number;
-  release_date?: string;
-  first_air_date?: string;
-  genres: { id: number; name: string }[];
-  runtime?: number;
-  number_of_seasons?: number;
-  number_of_episodes?: number;
-  status: string;
-  imdb_id?: string;
-}
-
-interface SeasonDetail {
-  season_number: number;
-  episodes: {
-    episode_number: number;
-    name: string;
-    overview: string;
-    still_path: string | null;
-    air_date: string | null;
-    runtime: number | null;
-  }[];
-}
+import { type BWMDetail, getRating, getPosterUrl } from "@/lib/tmdb";
 
 function buildPlayerUrl(contentId: string, contentType: string, season: number, episode: number): string {
   if (!contentId) return "";
@@ -52,8 +22,7 @@ export default function Watch() {
   const id = params?.id || "";
 
   const urlParams = new URLSearchParams(window.location.search);
-  const source = urlParams.get("source") || "tmdb";
-  const isZone = source === "zone";
+  const zoneTitle = urlParams.get("title") || "";
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDownloads, setShowDownloads] = useState(false);
@@ -94,38 +63,24 @@ export default function Watch() {
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
 
-  const tmdbEndpoint = type === "tv" ? `/api/tmdb/tv/${id}` : `/api/tmdb/movie/${id}`;
-  const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBDetail>({
-    queryKey: [tmdbEndpoint],
-    enabled: !!id,
+  const { data: bwmDetail, isLoading: detailLoading } = useQuery<BWMDetail>({
+    queryKey: ["/api/bwm/title", id],
+    enabled: !!id && id.startsWith("tt"),
   });
 
-  const { data: externalIds } = useQuery<{ imdb_id?: string }>({
-    queryKey: [`/api/tmdb/${type}/${id}/external_ids`],
-    enabled: !!id && !isZone && type === "tv",
-  });
+  const title = zoneTitle || bwmDetail?.primaryTitle || id;
+  const posterUrl = bwmDetail?.primaryImage?.url || "";
+  const rating = bwmDetail?.rating?.aggregateRating || 0;
+  const year = bwmDetail?.startYear ? String(bwmDetail.startYear) : "";
+  const description = bwmDetail?.plot || "";
+  const duration = bwmDetail?.runtime || 0;
+  const genres = bwmDetail?.genres || [];
+  const seasonCount = bwmDetail?.totalSeasons || 0;
+  const totalEpisodes = bwmDetail?.totalEpisodes || 0;
+  const seasons = bwmDetail?.seasons || [];
 
-  const tvId = useMemo(() => {
-    if (type !== "tv") return null;
-    if (!isZone) return id;
-    if (tmdbData?.id) return String(tmdbData.id);
-    return null;
-  }, [type, isZone, id, tmdbData]);
-
-  const { data: seasonData, isLoading: seasonLoading } = useQuery<SeasonDetail>({
-    queryKey: ["/api/tmdb/tv", tvId, "season", season],
-    queryFn: async () => {
-      const res = await fetch(`/api/tmdb/tv/${tvId}/season/${season}`);
-      if (!res.ok) throw new Error("Failed to fetch season");
-      return res.json();
-    },
-    enabled: !!tvId && type === "tv",
-  });
-
-  const episodes = seasonData?.episodes || [];
-  const episodeCount = episodes.length;
-  const seasonCount = tmdbData?.number_of_seasons || 0;
-  const totalEpisodes = tmdbData?.number_of_episodes || 0;
+  const currentSeasonData = seasons.find(s => s.seasonNumber === season);
+  const episodeCount = currentSeasonData?.episodeCount || 0;
 
   useEffect(() => {
     if (episodeCount > 0 && episode > episodeCount) {
@@ -133,35 +88,7 @@ export default function Watch() {
     }
   }, [episodeCount, episode]);
 
-  const imdbId = useMemo(() => {
-    if (isZone && id.startsWith("tt")) return id;
-    if (type === "movie" && tmdbData?.imdb_id) return tmdbData.imdb_id;
-    if (type === "tv" && externalIds?.imdb_id) return externalIds.imdb_id;
-    return null;
-  }, [type, tmdbData, externalIds, isZone, id]);
-
-  const tmdbId = useMemo(() => {
-    if (tmdbData?.id) return String(tmdbData.id);
-    if (!isZone) return id;
-    return null;
-  }, [tmdbData, isZone, id]);
-
-  const zoneTitle = urlParams.get("title") || "";
-  const title = isZone
-    ? (zoneTitle || tmdbData?.title || tmdbData?.name || id)
-    : (tmdbData?.title || tmdbData?.name || "");
-
-  const contentId = tmdbId || imdbId || "";
-  const playerUrl = buildPlayerUrl(contentId, type, season, episode);
-
-  const posterUrl = getImageUrl(tmdbData?.poster_path || null, "w500");
-  const backdropUrl = getImageUrl(tmdbData?.backdrop_path || null, "w1280");
-  const rating = tmdbData?.vote_average || 0;
-  const year = ((tmdbData?.release_date || tmdbData?.first_air_date)?.split("-")[0] || "");
-  const description = tmdbData?.overview || "";
-  const duration = tmdbData?.runtime || 0;
-
-  const currentEpisodeData = episodes.find(ep => ep.episode_number === episode);
+  const playerUrl = buildPlayerUrl(id, type, season, episode);
 
   const isFirstEpisode = season <= 1 && episode <= 1;
   const isLastEpisode = season >= seasonCount && episode >= episodeCount;
@@ -177,9 +104,11 @@ export default function Watch() {
     if (episode > 1) {
       goTo(season, episode - 1);
     } else if (season > 1) {
-      goTo(season - 1, 999);
+      const prevSeasonData = seasons.find(s => s.seasonNumber === season - 1);
+      const prevEpCount = prevSeasonData?.episodeCount || 1;
+      goTo(season - 1, prevEpCount);
     }
-  }, [episode, season, goTo]);
+  }, [episode, season, goTo, seasons]);
 
   const goNext = useCallback(() => {
     if (episodeCount > 0 && episode < episodeCount) {
@@ -203,7 +132,7 @@ export default function Watch() {
     return () => window.removeEventListener("message", onMessage);
   }, [type, goNext]);
 
-  if (tmdbLoading) {
+  if (detailLoading && id.startsWith("tt")) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-green-500 animate-spin" />
@@ -214,9 +143,9 @@ export default function Watch() {
   return (
     <div className="min-h-screen bg-black">
       <div className="relative">
-        {(backdropUrl || posterUrl) && (
+        {posterUrl && (
           <div className="absolute inset-0 h-[500px]">
-            <img src={backdropUrl || posterUrl} alt="" className="w-full h-full object-cover" />
+            <img src={posterUrl} alt="" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black" />
           </div>
         )}
@@ -264,18 +193,13 @@ export default function Watch() {
                     {duration} min
                   </span>
                 )}
-                {tmdbData?.status && (
-                  <Badge variant="outline" className="text-green-400 border-green-500/20 bg-green-500/10 font-mono" data-testid="text-status">
-                    {tmdbData.status}
-                  </Badge>
-                )}
               </div>
 
-              {tmdbData?.genres && tmdbData.genres.length > 0 && (
+              {genres.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {tmdbData.genres.map((g) => (
-                    <Badge key={g.id} variant="outline" className="text-green-300 border-green-500/15 bg-green-500/10 font-mono" data-testid={`badge-genre-${g.id}`}>
-                      {g.name}
+                  {genres.map((g) => (
+                    <Badge key={g} variant="outline" className="text-green-300 border-green-500/15 bg-green-500/10 font-mono" data-testid={`badge-genre-${g}`}>
+                      {g}
                     </Badge>
                   ))}
                 </div>
@@ -289,7 +213,7 @@ export default function Watch() {
 
               {seasonCount > 0 && (
                 <p className="text-xs font-mono text-gray-500 mb-4" data-testid="text-seasons">
-                  {seasonCount} Seasons / {totalEpisodes} Episodes
+                  {seasonCount} Seasons {totalEpisodes > 0 ? `/ ${totalEpisodes} Episodes` : ""}
                 </p>
               )}
             </div>
@@ -314,11 +238,6 @@ export default function Watch() {
                     <span className="text-white font-display font-bold text-base">
                       S{season} E{episode}
                     </span>
-                    {currentEpisodeData?.name && (
-                      <span className="text-gray-400 text-sm ml-2 font-mono">
-                        {currentEpisodeData.name}
-                      </span>
-                    )}
                   </div>
                   <Button
                     size="sm"
@@ -428,27 +347,22 @@ export default function Watch() {
 
               <div className="mb-4">
                 <div className="flex gap-2 flex-wrap">
-                  {Array.from({ length: seasonCount }, (_, i) => i + 1).map((s) => (
+                  {seasons.map((s) => (
                     <Button
-                      key={s}
+                      key={s.seasonNumber}
                       size="sm"
-                      variant={season === s ? "default" : "ghost"}
-                      onClick={() => goTo(s, 1)}
-                      className={`font-mono text-xs ${season === s ? "bg-green-600 text-white" : "text-gray-400"}`}
-                      data-testid={`button-season-${s}`}
+                      variant={season === s.seasonNumber ? "default" : "ghost"}
+                      onClick={() => goTo(s.seasonNumber, 1)}
+                      className={`font-mono text-xs ${season === s.seasonNumber ? "bg-green-600 text-white" : "text-gray-400"}`}
+                      data-testid={`button-season-${s.seasonNumber}`}
                     >
-                      Season {s}
+                      Season {s.seasonNumber} ({s.episodeCount} ep)
                     </Button>
                   ))}
                 </div>
               </div>
 
-              {seasonLoading ? (
-                <div className="flex items-center gap-3 py-8 justify-center">
-                  <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
-                  <span className="text-sm font-mono text-gray-400">Loading episodes...</span>
-                </div>
-              ) : episodeCount > 0 ? (
+              {episodeCount > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-mono text-gray-400">
@@ -459,43 +373,32 @@ export default function Watch() {
                     </span>
                   </div>
                   <div className="grid gap-2 max-h-[500px] overflow-y-auto pr-1">
-                    {episodes.map((ep) => {
-                      const isActive = episode === ep.episode_number;
+                    {Array.from({ length: episodeCount }, (_, i) => i + 1).map((epNum) => {
+                      const isActive = episode === epNum;
                       return (
                         <button
-                          key={`s${season}-e${ep.episode_number}`}
-                          onClick={() => goTo(season, ep.episode_number)}
-                          className={`flex items-start gap-3 p-3 rounded-md text-left transition-all ${
+                          key={`s${season}-e${epNum}`}
+                          onClick={() => goTo(season, epNum)}
+                          className={`flex items-center gap-3 p-3 rounded-md text-left transition-all ${
                             isActive
                               ? "bg-green-500/20 border border-green-500/40 shadow-lg shadow-green-500/10"
                               : "bg-black/30 border border-green-500/5 hover:border-green-500/20 hover:bg-green-500/5"
                           }`}
-                          data-testid={`button-episode-${ep.episode_number}`}
+                          data-testid={`button-episode-${epNum}`}
                         >
                           <div className={`flex-shrink-0 w-10 h-10 rounded-md flex items-center justify-center font-mono text-sm font-bold ${
                             isActive
                               ? "bg-green-500 text-black"
                               : "bg-green-500/10 text-green-400"
                           }`}>
-                            {ep.episode_number}
+                            {epNum}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-mono font-medium truncate ${
+                            <p className={`text-sm font-mono font-medium ${
                               isActive ? "text-green-300" : "text-white"
                             }`}>
-                              {ep.name || `Episode ${ep.episode_number}`}
+                              Episode {epNum}
                             </p>
-                            {ep.overview && (
-                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{ep.overview}</p>
-                            )}
-                            <div className="flex items-center gap-2 mt-1">
-                              {ep.runtime && (
-                                <span className="text-[10px] font-mono text-gray-600">{ep.runtime}m</span>
-                              )}
-                              {ep.air_date && (
-                                <span className="text-[10px] font-mono text-gray-600">{ep.air_date}</span>
-                              )}
-                            </div>
                           </div>
                           {isActive && (
                             <div className="flex-shrink-0 flex items-center gap-1">
@@ -508,13 +411,19 @@ export default function Watch() {
                     })}
                   </div>
                 </div>
-              ) : null}
+              )}
             </GlassPanel>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+function decodeHtmlEntities(text: string): string {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = text;
+  return textarea.value;
 }
 
 function DownloadSection({ title }: { title: string }) {
@@ -575,31 +484,22 @@ function DownloadSection({ title }: { title: string }) {
             className="flex items-center justify-between gap-4 p-4 rounded-xl bg-black/40 border border-green-500/10 hover-elevate transition-colors"
             data-testid={`link-download-${i}`}
           >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <Download className="w-5 h-5 text-green-400" />
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-green-500/10 p-2">
+                <Download className="w-4 h-4 text-green-400" />
               </div>
-              <div className="min-w-0">
-                <p className="text-sm font-mono font-bold text-white" data-testid={`text-quality-${i}`}>
-                  {dl.quality || "Download"}
-                </p>
-                {dl.size && (
-                  <p className="text-xs font-mono text-gray-500" data-testid={`text-size-${i}`}>
-                    {dl.size}
-                  </p>
-                )}
+              <div>
+                <p className="text-sm font-mono text-white font-medium">{dl.quality}</p>
+                <p className="text-xs font-mono text-gray-500">{dl.size}</p>
               </div>
             </div>
-            <ExternalLink className="w-4 h-4 text-gray-500 flex-shrink-0" />
+            <Button size="sm" variant="outline" className="border-green-500/30 text-green-400 font-mono text-xs gap-1">
+              <ExternalLink className="w-3 h-3" />
+              Download
+            </Button>
           </a>
         );
       })}
     </div>
   );
-}
-
-function decodeHtmlEntities(html: string): string {
-  const textarea = document.createElement("textarea");
-  textarea.innerHTML = html;
-  return textarea.value;
 }

@@ -1,13 +1,13 @@
 import { ChevronRight } from "lucide-react";
 import { ContentCard } from "./content-card";
-import { type TMDBMovie } from "@/lib/tmdb";
+import { type BWMTitle } from "@/lib/tmdb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRef, useState } from "react";
 
 interface ContentRowProps {
   title: string;
   icon?: React.ReactNode;
-  items: TMDBMovie[];
+  items: BWMTitle[];
   type?: "movie" | "tv";
   isLoading?: boolean;
 }

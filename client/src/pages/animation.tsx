@@ -1,21 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { ContentRow } from "@/components/content-row";
-import { type TMDBMovie } from "@/lib/tmdb";
+import { type BWMResponse } from "@/lib/tmdb";
 import { Palette, Film, Tv, Sparkles } from "lucide-react";
 
-interface TMDBRes { results: TMDBMovie[] }
-
 const categories = [
-  { title: "Animated Movies", key: "movies", icon: <Film className="w-5 h-5" />, type: "movie" as const },
-  { title: "Anime Series", key: "anime", icon: <Sparkles className="w-5 h-5" />, type: "tv" as const },
-  { title: "Animated TV Shows", key: "tv", icon: <Tv className="w-5 h-5" />, type: "tv" as const },
-  { title: "Family Animation", key: "family", icon: <Palette className="w-5 h-5" />, type: "movie" as const },
+  { title: "Animated Movies", key: "animation-movies", icon: <Film className="w-5 h-5" />, type: "movie" as const },
+  { title: "Anime Series", key: "animation-anime", icon: <Sparkles className="w-5 h-5" />, type: "tv" as const },
+  { title: "Animated TV Shows", key: "animation-tv", icon: <Tv className="w-5 h-5" />, type: "tv" as const },
+  { title: "Family Animation", key: "animation-family", icon: <Palette className="w-5 h-5" />, type: "movie" as const },
 ];
 
 export default function Animation() {
   const queries = categories.map((cat) => {
-    const url = `/api/tmdb/animation/${cat.key}`;
-    return useQuery<TMDBRes>({ queryKey: [url] });
+    return useQuery<BWMResponse>({
+      queryKey: ["/api/bwm/category", cat.key],
+    });
   });
 
   return (
@@ -30,7 +29,7 @@ export default function Animation() {
           key={cat.key}
           title={cat.title}
           icon={cat.icon}
-          items={queries[i].data?.results || []}
+          items={queries[i].data?.titles || []}
           type={cat.type}
           isLoading={queries[i].isLoading}
         />

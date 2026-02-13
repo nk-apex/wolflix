@@ -1,25 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { ContentRow } from "@/components/content-row";
-import { type TMDBMovie } from "@/lib/tmdb";
+import { type BWMResponse } from "@/lib/tmdb";
 import { Flame, Sword, Rocket, Ghost, Theater, Laugh } from "lucide-react";
-
-interface TMDBRes { results: TMDBMovie[] }
 
 const categories = [
   { title: "Trending Movies", key: "trending", icon: <Flame className="w-5 h-5" /> },
-  { title: "Action Movies", key: "28", icon: <Sword className="w-5 h-5" /> },
-  { title: "Sci-Fi Movies", key: "878", icon: <Rocket className="w-5 h-5" /> },
-  { title: "Horror Movies", key: "27", icon: <Ghost className="w-5 h-5" /> },
-  { title: "Drama Movies", key: "18", icon: <Theater className="w-5 h-5" /> },
-  { title: "Comedy Movies", key: "35", icon: <Laugh className="w-5 h-5" /> },
+  { title: "Action Movies", key: "action", icon: <Sword className="w-5 h-5" /> },
+  { title: "Sci-Fi Movies", key: "scifi", icon: <Rocket className="w-5 h-5" /> },
+  { title: "Horror Movies", key: "horror", icon: <Ghost className="w-5 h-5" /> },
+  { title: "Drama Movies", key: "drama", icon: <Theater className="w-5 h-5" /> },
+  { title: "Comedy Movies", key: "comedy", icon: <Laugh className="w-5 h-5" /> },
 ];
 
 export default function Movies() {
   const queries = categories.map((cat) => {
-    const url = cat.key === "trending"
-      ? "/api/tmdb/movies/trending"
-      : `/api/tmdb/movies/genre/${cat.key}`;
-    return useQuery<TMDBRes>({ queryKey: [url] });
+    return useQuery<BWMResponse>({
+      queryKey: ["/api/bwm/category", cat.key],
+    });
   });
 
   return (
@@ -33,7 +30,7 @@ export default function Movies() {
           key={cat.key}
           title={cat.title}
           icon={cat.icon}
-          items={queries[i].data?.results || []}
+          items={queries[i].data?.titles || []}
           type="movie"
           isLoading={queries[i].isLoading}
         />

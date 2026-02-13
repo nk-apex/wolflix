@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Film, Play, TrendingUp, Tv, Clock, Zap, ArrowRight, Activity, Search, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
 import { useQuery } from "@tanstack/react-query";
-import { type TMDBMovie, getImageUrl, getRating, getYear } from "@/lib/tmdb";
+import { type BWMTitle, type BWMResponse, getRating, getYear, getPosterUrl, getMediaType } from "@/lib/tmdb";
 import { ContentCard } from "@/components/content-card";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,12 +26,13 @@ export default function Welcome() {
   const [searchQuery, setSearchQuery] = useState("");
   const [heroIndex, setHeroIndex] = useState(0);
 
-  const { data: trending, isLoading } = useQuery<{ results: TMDBMovie[] }>({
-    queryKey: ["/api/tmdb/trending"],
+  const { data: trending, isLoading } = useQuery<BWMResponse>({
+    queryKey: ["/api/bwm/category", "trending"],
   });
 
-  const heroItems = trending?.results?.slice(0, 8) || [];
-  const trendingItems = trending?.results?.slice(0, 12) || [];
+  const allItems = trending?.titles || [];
+  const heroItems = allItems.slice(0, 8);
+  const trendingItems = allItems.slice(0, 12);
   const featured = heroItems[heroIndex];
 
   const nextHero = useCallback(() => {
@@ -60,24 +61,27 @@ export default function Welcome() {
   return (
     <div className="min-h-screen">
       <div className="relative overflow-hidden min-h-[520px]">
-        {heroItems.map((item, idx) => (
-          <div
-            key={item.id}
-            className={`absolute inset-0 transition-opacity duration-700 ${idx === heroIndex ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-          >
-            {item.backdrop_path && (
-              <>
-                <img
-                  src={getImageUrl(item.backdrop_path, "w1280")}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black" />
-                <div className="absolute inset-0 bg-gradient-to-r from-black via-black/50 to-transparent" />
-              </>
-            )}
-          </div>
-        ))}
+        {heroItems.map((item, idx) => {
+          const posterUrl = getPosterUrl(item);
+          return (
+            <div
+              key={item.id}
+              className={`absolute inset-0 transition-opacity duration-700 ${idx === heroIndex ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            >
+              {posterUrl && (
+                <>
+                  <img
+                    src={posterUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-black via-black/50 to-transparent" />
+                </>
+              )}
+            </div>
+          );
+        })}
 
         <div className="relative z-10 px-6 pt-12 pb-16 max-w-6xl mx-auto">
           <div className="mb-2">
@@ -132,25 +136,22 @@ export default function Welcome() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-xs font-mono text-green-400 uppercase tracking-wider">Featured</span>
-                  {featured.vote_average > 0 && (
+                  {getRating(featured.rating) && (
                     <span className="flex items-center gap-1 text-xs font-mono text-green-400">
                       <Star className="w-3 h-3 fill-green-400" />
-                      {getRating(featured.vote_average)}
+                      {getRating(featured.rating)}
                     </span>
                   )}
-                  {getYear(featured.release_date || featured.first_air_date) && (
+                  {featured.startYear && (
                     <span className="text-xs font-mono text-gray-500">
-                      {getYear(featured.release_date || featured.first_air_date)}
+                      {featured.startYear}
                     </span>
                   )}
                 </div>
                 <h2 className="text-2xl md:text-3xl font-display font-bold text-white mb-2" data-testid="text-hero-title">
-                  {featured.title || featured.name}
+                  {featured.primaryTitle}
                 </h2>
-                <p className="text-sm text-gray-400 font-mono line-clamp-2 max-w-lg mb-4">
-                  {featured.overview}
-                </p>
-                <Link href={`/watch/${featured.media_type === "tv" ? "tv" : "movie"}/${featured.id}`}>
+                <Link href={`/watch/${getMediaType(featured.type)}/${featured.id}?source=zone&title=${encodeURIComponent(featured.primaryTitle)}`}>
                   <button
                     className="flex items-center gap-2 rounded-xl bg-green-500 px-5 py-2 font-mono text-sm font-bold text-black transition-all hover:bg-green-400"
                     data-testid="button-stream-featured"
@@ -226,7 +227,7 @@ export default function Welcome() {
                   </div>
                 ))
               : trendingItems.map((item) => (
-                  <ContentCard key={item.id} item={item} type={item.media_type === "tv" ? "tv" : "movie"} />
+                  <ContentCard key={item.id} item={item} type={getMediaType(item.type)} />
                 ))}
           </div>
         </div>

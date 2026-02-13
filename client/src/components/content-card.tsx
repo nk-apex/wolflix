@@ -2,21 +2,22 @@ import { Play, Download, Star } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "./glass-card";
-import { getImageUrl, getRating, getYear, type TMDBMovie } from "@/lib/tmdb";
+import { type BWMTitle, getMediaType, getRating, getYear, getPosterUrl } from "@/lib/tmdb";
 
 interface ContentCardProps {
-  item: TMDBMovie;
+  item: BWMTitle;
   type?: "movie" | "tv";
 }
 
-export function ContentCard({ item, type = "movie" }: ContentCardProps) {
+export function ContentCard({ item, type }: ContentCardProps) {
   const [, navigate] = useLocation();
-  const title = item.title || item.name || "Untitled";
-  const year = getYear(item.release_date || item.first_air_date);
-  const posterUrl = getImageUrl(item.poster_path, "w342");
-  const mediaType = item.media_type === "tv" ? "tv" : type;
+  const title = item.primaryTitle || "Untitled";
+  const year = getYear(item.startYear);
+  const posterUrl = getPosterUrl(item);
+  const mediaType = type || getMediaType(item.type);
+  const ratingStr = getRating(item.rating);
 
-  const goToWatch = () => navigate(`/watch/${mediaType}/${item.id}`);
+  const goToWatch = () => navigate(`/watch/${mediaType}/${item.id}?source=zone&title=${encodeURIComponent(title)}`);
 
   return (
     <GlassCard className="group overflow-visible flex-shrink-0 w-[180px]" onClick={goToWatch}>
@@ -55,10 +56,10 @@ export function ContentCard({ item, type = "movie" }: ContentCardProps) {
             <Download className="w-3 h-3" />
           </Button>
         </div>
-        {item.vote_average > 0 && (
+        {ratingStr && (
           <div className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-xs font-mono" data-testid={`text-rating-${item.id}`}>
             <Star className="w-3 h-3 text-green-400 fill-green-400" />
-            <span className="text-green-400">{getRating(item.vote_average)}</span>
+            <span className="text-green-400">{ratingStr}</span>
           </div>
         )}
       </div>

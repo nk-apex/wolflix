@@ -1,49 +1,51 @@
-const IMG_BASE = "https://image.tmdb.org/t/p";
-
-export const IMG = `${IMG_BASE}/w342`;
-export const IMG_BACKDROP = `${IMG_BASE}/w1280`;
-export const IMG_POSTER_SM = `${IMG_BASE}/w185`;
-
-export interface TMDBMovie {
-  id: number;
-  title: string;
-  name?: string;
-  overview: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  vote_average: number;
-  release_date?: string;
-  first_air_date?: string;
-  genre_ids: number[];
-  media_type?: string;
-  popularity: number;
+export interface BWMTitle {
+  id: string;
+  type: string;
+  primaryTitle: string;
+  originalTitle?: string;
+  primaryImage?: { url: string; width: number; height: number };
+  startYear?: number;
+  endYear?: number;
+  rating?: { aggregateRating: number; voteCount: number };
+  genres?: string[];
 }
 
-export interface TMDBResponse {
-  results: TMDBMovie[];
-  page: number;
-  total_pages: number;
-  total_results: number;
+export interface BWMResponse {
+  titles: BWMTitle[];
 }
 
-export function openStream(type: string, id: number) {
-  window.open(`https://vidsrc.cc/v2/embed/${type}/${id}`, "_blank");
+export interface BWMDetail {
+  id: string;
+  type: string;
+  primaryTitle: string;
+  originalTitle?: string;
+  primaryImage?: { url: string; width: number; height: number };
+  startYear?: number;
+  endYear?: number;
+  rating?: { aggregateRating: number; voteCount: number };
+  genres?: string[];
+  plot?: string;
+  runtime?: number;
+  totalSeasons?: number;
+  totalEpisodes?: number;
+  seasons?: { seasonNumber: number; episodeCount: number }[];
 }
 
-export function openDownload(type: string, id: number) {
-  window.open(`https://vidsrc.me/download/${type}?tmdb=${id}`, "_blank");
+export function getMediaType(type: string): "movie" | "tv" {
+  if (type === "tvSeries" || type === "tvMiniSeries" || type === "tvSpecial") return "tv";
+  return "movie";
 }
 
-export function getImageUrl(path: string | null, size: string = "w342"): string {
-  if (!path) return "";
-  return `${IMG_BASE}/${size}${path}`;
+export function getRating(rating?: { aggregateRating: number; voteCount: number }): string {
+  if (!rating?.aggregateRating) return "";
+  return rating.aggregateRating.toFixed(1);
 }
 
-export function getRating(vote: number): string {
-  return vote.toFixed(1);
+export function getYear(startYear?: number): string {
+  if (!startYear) return "";
+  return String(startYear);
 }
 
-export function getYear(date?: string): string {
-  if (!date) return "";
-  return date.split("-")[0];
+export function getPosterUrl(item: BWMTitle): string {
+  return item.primaryImage?.url || "";
 }

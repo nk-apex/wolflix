@@ -1,76 +1,9 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Search as SearchIcon, X, Film, Tv } from "lucide-react";
-import { ContentCard } from "@/components/content-card";
-import { type TMDBMovie } from "@/lib/tmdb";
+import { Search as SearchIcon, X, Film, Tv, Star } from "lucide-react";
+import { type BWMTitle, type BWMResponse, getMediaType, getRating, getPosterUrl } from "@/lib/tmdb";
 import { Skeleton } from "@/components/ui/skeleton";
-
-interface TMDBRes { results: TMDBMovie[] }
-
-interface IMDBTitle {
-  id: string;
-  type: string;
-  primaryTitle: string;
-  originalTitle: string;
-  primaryImage?: { url: string; width: number; height: number };
-  startYear: number;
-  genres: string[];
-}
-
-interface IMDBRes { titles: IMDBTitle[] }
-
-interface UnifiedResult {
-  id: string;
-  title: string;
-  year: string;
-  posterUrl: string | null;
-  mediaType: "movie" | "tv";
-  source: "tmdb" | "imdb";
-  tmdbItem?: TMDBMovie;
-  imdbItem?: IMDBTitle;
-}
-
-function deduplicateResults(tmdbResults: TMDBMovie[], imdbResults: IMDBTitle[]): UnifiedResult[] {
-  const results: UnifiedResult[] = [];
-  const seenTitles = new Set<string>();
-
-  for (const item of imdbResults) {
-    if (!item.primaryImage?.url) continue;
-    const key = `${item.primaryTitle.toLowerCase()}-${item.startYear}`;
-    if (seenTitles.has(key)) continue;
-    seenTitles.add(key);
-    results.push({
-      id: item.id,
-      title: item.primaryTitle,
-      year: String(item.startYear || ""),
-      posterUrl: item.primaryImage.url,
-      mediaType: item.type === "tvSeries" || item.type === "tvMiniSeries" ? "tv" : "movie",
-      source: "imdb",
-      imdbItem: item,
-    });
-  }
-
-  for (const item of tmdbResults) {
-    if (!item.poster_path) continue;
-    const title = item.title || item.name || "";
-    const year = (item.release_date || item.first_air_date || "").split("-")[0];
-    const key = `${title.toLowerCase()}-${year}`;
-    if (seenTitles.has(key)) continue;
-    seenTitles.add(key);
-    results.push({
-      id: String(item.id),
-      title,
-      year,
-      posterUrl: `https://image.tmdb.org/t/p/w500${item.poster_path}`,
-      mediaType: item.media_type === "tv" ? "tv" : "movie",
-      source: "tmdb",
-      tmdbItem: item,
-    });
-  }
-
-  return results;
-}
 
 export default function SearchPage() {
   const [location] = useLocation();
@@ -87,22 +20,12 @@ export default function SearchPage() {
     }
   }, [location]);
 
-  const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBRes>({
-    queryKey: ["/api/tmdb/search", searchTerm],
+  const { data: bwmData, isLoading } = useQuery<BWMResponse>({
+    queryKey: ["/api/bwm/search", searchTerm],
     enabled: searchTerm.length > 1,
     queryFn: async () => {
-      const res = await fetch(`/api/tmdb/search/${encodeURIComponent(searchTerm)}`);
+      const res = await fetch(`/api/bwm/search?q=${encodeURIComponent(searchTerm)}`);
       if (!res.ok) throw new Error("Search failed");
-      return res.json();
-    },
-  });
-
-  const { data: imdbData, isLoading: imdbLoading } = useQuery<IMDBRes>({
-    queryKey: ["/api/imdb/search", searchTerm],
-    enabled: searchTerm.length > 1,
-    queryFn: async () => {
-      const res = await fetch(`/api/imdb/search?q=${encodeURIComponent(searchTerm)}`);
-      if (!res.ok) throw new Error("IMDB search failed");
       return res.json();
     },
   });
@@ -112,18 +35,11 @@ export default function SearchPage() {
     setSearchTerm(query.trim());
   };
 
-  const tmdbResults = tmdbData?.results || [];
-  const imdbResults = imdbData?.titles || [];
-  const isLoading = tmdbLoading || imdbLoading;
+  const results = (bwmData?.titles || []).filter(t => t.primaryImage?.url);
 
-  const unified = deduplicateResults(tmdbResults, imdbResults);
-
-  const handleResultClick = (item: UnifiedResult) => {
-    if (item.source === "imdb") {
-      navigate(`/watch/${item.mediaType}/${item.id}?source=zone&title=${encodeURIComponent(item.title)}`);
-    } else if (item.tmdbItem) {
-      navigate(`/watch/${item.mediaType}/${item.tmdbItem.id}`);
-    }
+  const handleResultClick = (item: BWMTitle) => {
+    const mediaType = getMediaType(item.type);
+    navigate(`/watch/${mediaType}/${item.id}?source=zone&title=${encodeURIComponent(item.primaryTitle)}`);
   };
 
   return (
@@ -157,10 +73,10 @@ export default function SearchPage() {
         </div>
       </form>
 
-      {searchTerm && !isLoading && unified.length > 0 && (
+      {searchTerm && !isLoading && results.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-mono text-gray-500">
-            Wolflix Results ({unified.length})
+            Wolflix Results ({results.length})
           </p>
         </div>
       )}
@@ -176,42 +92,37 @@ export default function SearchPage() {
         </div>
       )}
 
-      {!isLoading && searchTerm && unified.length > 0 && (
+      {!isLoading && searchTerm && results.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {unified.map((item) => {
-            if (item.source === "tmdb" && item.tmdbItem) {
-              return (
-                <ContentCard
-                  key={`tmdb-${item.id}`}
-                  item={item.tmdbItem}
-                  type={item.mediaType}
-                />
-              );
-            }
+          {results.map((item) => {
+            const posterUrl = getPosterUrl(item);
+            const mediaType = getMediaType(item.type);
+            const ratingStr = getRating(item.rating);
             return (
               <div
-                key={`imdb-${item.id}`}
+                key={item.id}
                 onClick={() => handleResultClick(item)}
                 className="cursor-pointer group"
                 data-testid={`card-result-${item.id}`}
               >
                 <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-green-500/10 bg-black/40">
                   <img
-                    src={item.posterUrl!}
-                    alt={item.title}
+                    src={posterUrl}
+                    alt={item.primaryTitle}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-[10px] font-mono text-green-400">
-                      {item.imdbItem?.genres?.slice(0, 2).join(" / ")}
-                    </span>
-                  </div>
+                  {ratingStr && (
+                    <div className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-xs font-mono">
+                      <Star className="w-3 h-3 text-green-400 fill-green-400" />
+                      <span className="text-green-400">{ratingStr}</span>
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs font-mono text-white mt-2 line-clamp-1">{item.title}</p>
+                <p className="text-xs font-mono text-white mt-2 line-clamp-1">{item.primaryTitle}</p>
                 <div className="flex items-center gap-1.5">
-                  <p className="text-[10px] font-mono text-gray-500">{item.year} {item.mediaType === "tv" ? <Tv className="inline w-3 h-3" /> : <Film className="inline w-3 h-3" />}</p>
+                  <p className="text-[10px] font-mono text-gray-500">{item.startYear || ""} {mediaType === "tv" ? <Tv className="inline w-3 h-3" /> : <Film className="inline w-3 h-3" />}</p>
                 </div>
               </div>
             );
@@ -219,7 +130,7 @@ export default function SearchPage() {
         </div>
       )}
 
-      {!isLoading && searchTerm && unified.length === 0 && (
+      {!isLoading && searchTerm && results.length === 0 && (
         <div className="text-center py-20">
           <SearchIcon className="w-12 h-12 text-green-500/20 mx-auto mb-4" />
           <p className="text-gray-500 font-mono text-sm">No results found for "{searchTerm}"</p>
@@ -233,7 +144,7 @@ export default function SearchPage() {
             <Tv className="w-8 h-8 text-green-500/20" />
           </div>
           <p className="text-gray-500 font-mono text-sm">Search for movies, TV shows, and more</p>
-          <p className="text-gray-600 font-mono text-xs mt-1">Wolflix combines multiple sources for the best results</p>
+          <p className="text-gray-600 font-mono text-xs mt-1">Powered by BWM / IMDB database</p>
         </div>
       )}
     </div>

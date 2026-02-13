@@ -1,21 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { ContentRow } from "@/components/content-row";
-import { type TMDBMovie } from "@/lib/tmdb";
+import { type BWMResponse } from "@/lib/tmdb";
 import { BookOpen, Library, Crown, Scroll } from "lucide-react";
 
-interface TMDBRes { results: TMDBMovie[] }
-
 const categories = [
-  { title: "Book Adaptations", key: "adaptations", icon: <BookOpen className="w-5 h-5" />, type: "movie" as const },
-  { title: "Literary Classics", key: "classics", icon: <Library className="w-5 h-5" />, type: "movie" as const },
-  { title: "Fantasy Epics", key: "fantasy", icon: <Crown className="w-5 h-5" />, type: "movie" as const },
-  { title: "Story-Based Series", key: "series", icon: <Scroll className="w-5 h-5" />, type: "tv" as const },
+  { title: "Book Adaptations", key: "novel-adaptations", icon: <BookOpen className="w-5 h-5" />, type: "movie" as const },
+  { title: "Literary Classics", key: "novel-classics", icon: <Library className="w-5 h-5" />, type: "movie" as const },
+  { title: "Fantasy Epics", key: "novel-fantasy", icon: <Crown className="w-5 h-5" />, type: "movie" as const },
+  { title: "Story-Based Series", key: "novel-series", icon: <Scroll className="w-5 h-5" />, type: "tv" as const },
 ];
 
 export default function Novel() {
   const queries = categories.map((cat) => {
-    const url = `/api/tmdb/novel/${cat.key}`;
-    return useQuery<TMDBRes>({ queryKey: [url] });
+    return useQuery<BWMResponse>({
+      queryKey: ["/api/bwm/category", cat.key],
+    });
   });
 
   return (
@@ -30,7 +29,7 @@ export default function Novel() {
           key={cat.key}
           title={cat.title}
           icon={cat.icon}
-          items={queries[i].data?.results || []}
+          items={queries[i].data?.titles || []}
           type={cat.type}
           isLoading={queries[i].isLoading}
         />
