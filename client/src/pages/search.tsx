@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Search as SearchIcon, X, Film, Tv, Zap } from "lucide-react";
 import { ContentCard } from "@/components/content-card";
 import { MovieBoxCard } from "@/components/moviebox-card";
@@ -10,8 +11,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface TMDBRes { results: TMDBMovie[] }
 
 export default function Search() {
-  const [query, setQuery] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [location] = useLocation();
+  const urlQ = new URLSearchParams(window.location.search).get("q") || "";
+  const [query, setQuery] = useState(urlQ);
+  const [searchTerm, setSearchTerm] = useState(urlQ);
+
+  useEffect(() => {
+    const currentQ = new URLSearchParams(window.location.search).get("q") || "";
+    if (currentQ && currentQ !== searchTerm) {
+      setQuery(currentQ);
+      setSearchTerm(currentQ);
+    }
+  }, [location]);
   const [activeTab, setActiveTab] = useState<"all" | "tmdb" | "moviebox">("all");
 
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBRes>({
@@ -155,8 +166,8 @@ export default function Search() {
             </div>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {mbResults.filter((r: MovieBoxItem) => r.cover?.url).map((item: MovieBoxItem) => (
-              <MovieBoxCard key={item.subjectId} item={item} />
+            {mbResults.filter((r: MovieBoxItem) => r.cover?.url).map((item: MovieBoxItem, idx: number) => (
+              <MovieBoxCard key={`${item.subjectId}-${idx}`} item={item} />
             ))}
           </div>
         </div>

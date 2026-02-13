@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, Globe, Subtitles } from "lucide-react";
+import { Play, Pause, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, Globe, Subtitles, SkipBack, SkipForward, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
@@ -71,7 +71,10 @@ export default function Watch() {
 
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isStopped, setIsStopped] = useState(false);
+  const [showDownloads, setShowDownloads] = useState(false);
   const playerContainerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const toggleFullscreen = useCallback(() => {
     if (!playerContainerRef.current) return;
@@ -141,7 +144,8 @@ export default function Watch() {
 
   const movieboxDomain = streamDomain?.data?.replace(/\/$/, "") || "https://123movienow.cc";
 
-  const streamUrl = `${movieboxDomain}/play/${id}`;
+  const detailPath = isMovieBox && mbItem?.detailPath ? mbItem.detailPath : id;
+  const streamUrl = `${movieboxDomain}/play/${detailPath}`;
 
   const posterUrl = isMovieBox
     ? (mbItem ? getMovieBoxCover(mbItem) : "")
@@ -174,6 +178,18 @@ export default function Watch() {
   const country = isMovieBox ? (mbItem?.countryName || "") : "";
 
   const mbRelated = mbDetailRec?.data?.items || [];
+
+  const navigateRelated = (direction: "prev" | "next") => {
+    if (mbRelated.length === 0) return;
+    const currentIdx = mbRelated.findIndex(r => String(r.subjectId) === String(id));
+    let targetIdx = direction === "next" ? currentIdx + 1 : currentIdx - 1;
+    if (targetIdx < 0) targetIdx = mbRelated.length - 1;
+    if (targetIdx >= mbRelated.length) targetIdx = 0;
+    const target = mbRelated[targetIdx];
+    const mediaType = target.subjectType === 2 ? "tv" : "movie";
+    sessionStorage.setItem(`mb_item_${target.subjectId}`, JSON.stringify(target));
+    navigate(`/watch/${mediaType}/${target.subjectId}?source=moviebox`);
+  };
 
   if (tmdbLoading && !isMovieBox) {
     return (
@@ -315,98 +331,163 @@ export default function Watch() {
                 MovieBox
               </Badge>
             </div>
-            <div ref={playerContainerRef} className="relative w-full aspect-video rounded-xl overflow-hidden border border-green-500/20 bg-black">
+            <div ref={playerContainerRef} className="relative w-full aspect-video rounded-t-xl overflow-hidden border border-green-500/20 border-b-0 bg-black">
+              {isStopped && (
+                <div className="absolute inset-0 z-10 bg-black/70 flex items-center justify-center cursor-pointer" onClick={() => setIsStopped(false)}>
+                  <div className="text-center">
+                    <Play className="w-16 h-16 text-green-400 mx-auto mb-2" />
+                    <p className="text-sm font-mono text-gray-400">Click to Resume</p>
+                  </div>
+                </div>
+              )}
               <iframe
-                src={streamUrl}
+                ref={iframeRef}
+                src={isStopped ? "about:blank" : streamUrl}
                 className="absolute inset-0 w-full h-full"
                 allowFullScreen
                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
                 referrerPolicy="origin"
                 data-testid="iframe-player"
               />
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={toggleFullscreen}
-                className="absolute top-3 right-3 z-20 bg-black/60 text-white backdrop-blur-sm"
-                data-testid="button-fullscreen"
-              >
-                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-              </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 px-4 py-3 rounded-b-xl border border-green-500/20 border-t-0 bg-black/60 backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => navigateRelated("prev")}
+                  className="text-gray-400"
+                  disabled={mbRelated.length === 0}
+                  data-testid="button-prev"
+                >
+                  <SkipBack className="w-4 h-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setIsStopped(!isStopped)}
+                  className="text-white"
+                  data-testid="button-pause"
+                >
+                  {isStopped ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => navigateRelated("next")}
+                  className="text-gray-400"
+                  disabled={mbRelated.length === 0}
+                  data-testid="button-next"
+                >
+                  <SkipForward className="w-4 h-4" />
+                </Button>
+              </div>
+
+              <div className="flex-1 text-center">
+                <p className="text-xs font-mono text-gray-400 truncate" data-testid="text-now-playing">
+                  {title || "Now Playing"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowDownloads(!showDownloads)}
+                  className="text-green-400 font-mono text-xs"
+                  data-testid="button-toggle-downloads"
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  Download
+                  <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showDownloads ? "rotate-180" : ""}`} />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={toggleFullscreen}
+                  className="text-white"
+                  data-testid="button-fullscreen"
+                >
+                  {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                </Button>
+              </div>
             </div>
           </GlassPanel>
 
-          <GlassPanel className="mb-8">
-            <h2 className="text-lg font-display font-bold text-white flex items-center gap-2 mb-4" data-testid="text-download-heading">
-              <Download className="w-5 h-5 text-green-400" />
-              Download Links
-            </h2>
+          {showDownloads && (
+            <GlassPanel className="mb-8">
+              <h2 className="text-lg font-display font-bold text-white flex items-center gap-2 mb-4" data-testid="text-download-heading">
+                <Download className="w-5 h-5 text-green-400" />
+                Download Links
+              </h2>
 
-            {arslanSearching || detailLoading ? (
-              <div className="flex items-center gap-3 py-8 justify-center">
-                <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
-                <span className="text-sm font-mono text-gray-400" data-testid="text-searching">Searching for download sources...</span>
-              </div>
-            ) : dlLinks.length > 0 ? (
-              <div className="space-y-3">
-                {dlLinks.map((link, i) => (
-                  <a
-                    key={i}
-                    href={link.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-4 p-4 rounded-xl bg-black/40 border border-green-500/10 hover-elevate transition-colors"
-                    data-testid={`link-download-${i}`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                        <Download className="w-5 h-5 text-green-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-mono font-bold text-white truncate" data-testid={`text-quality-${i}`}>{link.quality}</p>
-                        {link.size && link.size !== "----" && (
-                          <p className="text-xs font-mono text-gray-500" data-testid={`text-size-${i}`}>{link.size}</p>
-                        )}
-                      </div>
-                    </div>
-                    <ExternalLink className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                  </a>
-                ))}
-              </div>
-            ) : arslanResults.length === 0 && !arslanSearching ? (
-              <div className="text-center py-8">
-                <Search className="w-8 h-8 text-green-500/20 mx-auto mb-3" />
-                <p className="text-sm font-mono text-gray-500" data-testid="text-no-downloads">No download sources found for this title</p>
-                <p className="text-xs font-mono text-gray-600 mt-1">Try using the stream player above</p>
-              </div>
-            ) : null}
-
-            {arslanResults.length > 1 && (
-              <div className="mt-6 pt-4 border-t border-green-500/10">
-                <p className="text-xs font-mono text-gray-500 mb-3" data-testid="text-other-sources">Other sources found:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {arslanResults.map((result, i) => (
-                    <Button
+              {arslanSearching || detailLoading ? (
+                <div className="flex items-center gap-3 py-8 justify-center">
+                  <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
+                  <span className="text-sm font-mono text-gray-400" data-testid="text-searching">Searching for download sources...</span>
+                </div>
+              ) : dlLinks.length > 0 ? (
+                <div className="space-y-3">
+                  {dlLinks.map((link, i) => (
+                    <a
                       key={i}
-                      variant="ghost"
-                      onClick={() => setSelectedSource(result.link)}
-                      className={`text-left h-auto p-3 justify-start font-mono text-xs ${
-                        bestMatch === result.link
-                          ? "border border-green-500/40 bg-green-500/10 text-green-400"
-                          : "border border-green-500/10 text-gray-400"
-                      }`}
-                      data-testid={`button-source-${i}`}
+                      href={link.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between gap-4 p-4 rounded-xl bg-black/40 border border-green-500/10 hover-elevate transition-colors"
+                      data-testid={`link-download-${i}`}
                     >
-                      <div className="min-w-0 w-full">
-                        <p className="truncate font-bold" data-testid={`text-source-title-${i}`}>{result.title}</p>
-                        <p className="text-gray-600 mt-0.5">{result.year} / {result.type} / IMDB {result.imdb}</p>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                          <Download className="w-5 h-5 text-green-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-mono font-bold text-white truncate" data-testid={`text-quality-${i}`}>{link.quality}</p>
+                          {link.size && link.size !== "----" && (
+                            <p className="text-xs font-mono text-gray-500" data-testid={`text-size-${i}`}>{link.size}</p>
+                          )}
+                        </div>
                       </div>
-                    </Button>
+                      <ExternalLink className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    </a>
                   ))}
                 </div>
-              </div>
-            )}
-          </GlassPanel>
+              ) : arslanResults.length === 0 && !arslanSearching ? (
+                <div className="text-center py-8">
+                  <Search className="w-8 h-8 text-green-500/20 mx-auto mb-3" />
+                  <p className="text-sm font-mono text-gray-500" data-testid="text-no-downloads">No download sources found for this title</p>
+                  <p className="text-xs font-mono text-gray-600 mt-1">Try using the stream player above</p>
+                </div>
+              ) : null}
+
+              {arslanResults.length > 1 && (
+                <div className="mt-6 pt-4 border-t border-green-500/10">
+                  <p className="text-xs font-mono text-gray-500 mb-3" data-testid="text-other-sources">Other sources found:</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {arslanResults.map((result, i) => (
+                      <Button
+                        key={i}
+                        variant="ghost"
+                        onClick={() => setSelectedSource(result.link)}
+                        className={`text-left h-auto p-3 justify-start font-mono text-xs ${
+                          bestMatch === result.link
+                            ? "border border-green-500/40 bg-green-500/10 text-green-400"
+                            : "border border-green-500/10 text-gray-400"
+                        }`}
+                        data-testid={`button-source-${i}`}
+                      >
+                        <div className="min-w-0 w-full">
+                          <p className="truncate font-bold" data-testid={`text-source-title-${i}`}>{result.title}</p>
+                          <p className="text-gray-600 mt-0.5">{result.year} / {result.type} / IMDB {result.imdb}</p>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </GlassPanel>
+          )}
 
           {mbRelated.length > 0 && (
             <GlassPanel className="mb-8">
