@@ -1,37 +1,13 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Pause, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, Globe, Subtitles, SkipBack, SkipForward, ChevronDown, Monitor, Tv2 } from "lucide-react";
+import { Play, Download, ArrowLeft, Star, Calendar, Clock, ExternalLink, Loader2, Search, Maximize, Minimize, Globe, SkipBack, SkipForward, ChevronDown, Tv2, Film, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
 import { MovieBoxCard } from "@/components/moviebox-card";
 import { getImageUrl } from "@/lib/tmdb";
 import { type MovieBoxItem, getMovieBoxCover, getMovieBoxYear, getMovieBoxRating } from "@/lib/moviebox";
-
-interface ArslanSearchResult {
-  title: string;
-  imdb: string;
-  year: string;
-  link: string;
-  image: string;
-  type: string;
-}
-
-interface ArslanMovieDetail {
-  title: string;
-  imdb: string;
-  tmdb: string;
-  date: string;
-  country: string;
-  runtime: string;
-  image: string;
-  category: string[];
-  description: string;
-  director: string;
-  cast: string;
-  dl_links: { quality: string; size: string; link: string }[];
-}
 
 interface TMDBDetail {
   id: number;
@@ -49,21 +25,6 @@ interface TMDBDetail {
   number_of_episodes?: number;
   status: string;
 }
-
-function decodeHtmlEntities(str: string): string {
-  const textarea = document.createElement("textarea");
-  textarea.innerHTML = str;
-  return textarea.value;
-}
-
-const STREAM_SERVERS = [
-  { id: "vidsrc", label: "VidSrc", icon: Monitor, getUrl: (tmdbId: string, mediaType: string) => `https://vidsrc.icu/embed/${mediaType}/${tmdbId}` },
-  { id: "multiembed", label: "MultiEmbed", icon: Globe, getUrl: (tmdbId: string, mediaType: string) => `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1` },
-  { id: "superembed", label: "SuperEmbed", icon: Tv2, getUrl: (tmdbId: string, _mediaType: string) => `https://getsuperembed.link/?video_id=${tmdbId}&tmdb=1` },
-  { id: "vidsrc_me", label: "VidSrc.me", icon: Monitor, getUrl: (tmdbId: string, mediaType: string) => `https://vidsrc.net/embed/${mediaType}/${tmdbId}` },
-] as const;
-
-type StreamServerId = typeof STREAM_SERVERS[number]["id"];
 
 export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
@@ -84,19 +45,19 @@ export default function Watch() {
     return null;
   }, [id, isMovieBox]);
 
-  const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isStopped, setIsStopped] = useState(false);
   const [showDownloads, setShowDownloads] = useState(false);
-  const [activeServer, setActiveServer] = useState<StreamServerId>("vidsrc");
+  const [selectedSeason, setSelectedSeason] = useState(1);
+  const [selectedEpisode, setSelectedEpisode] = useState(1);
+  const [selectedServer, setSelectedServer] = useState(0);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    setActiveServer("vidsrc");
-    setIsStopped(false);
     setShowDownloads(false);
-    setSelectedSource(null);
+    setSelectedSeason(1);
+    setSelectedEpisode(1);
+    setSelectedServer(0);
   }, [id, isMovieBox]);
 
   const toggleFullscreen = useCallback(() => {
@@ -114,8 +75,9 @@ export default function Watch() {
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
 
+  const tmdbEndpoint = type === "tv" ? `/api/tmdb/tv/${id}` : `/api/tmdb/movie/${id}`;
   const { data: tmdbData, isLoading: tmdbLoading } = useQuery<TMDBDetail>({
-    queryKey: ["/api/tmdb", type, id],
+    queryKey: [tmdbEndpoint],
     enabled: !!id && !isMovieBox,
   });
 
@@ -161,58 +123,84 @@ export default function Watch() {
     ? (effectiveMbItem?.title || "")
     : (tmdbData?.title || tmdbData?.name || "");
 
-  const { data: tmdbSearchForMb } = useQuery<{ results: { id: number; media_type: string; title?: string; name?: string }[] }>({
-    queryKey: ["/api/tmdb/search", title],
-    enabled: isMovieBox && !!title && title.length > 1,
-  });
+  const detailPath = effectiveMbItem?.detailPath || "";
 
-  const tmdbIdForMb = useMemo(() => {
-    if (!isMovieBox) return null;
-    if (!tmdbSearchForMb?.results) return null;
-    const lowerTitle = title.toLowerCase();
-    const match = tmdbSearchForMb.results.find(r =>
-      (r.title || r.name || "").toLowerCase() === lowerTitle
-    ) || tmdbSearchForMb.results[0];
-    return match ? String(match.id) : null;
-  }, [tmdbSearchForMb, title, isMovieBox]);
-
-  const streamTmdbId = isMovieBox ? tmdbIdForMb : id;
-  const streamMediaType = type === "tv" ? "tv" : "movie";
-
-  const streamUrl = useMemo(() => {
-    if (!streamTmdbId) return "";
-    const server = STREAM_SERVERS.find(s => s.id === activeServer) || STREAM_SERVERS[0];
-    return server.getUrl(streamTmdbId, streamMediaType);
-  }, [streamTmdbId, streamMediaType, activeServer]);
-
-  const { data: arslanSearch, isLoading: arslanSearching } = useQuery<{ result?: { data?: ArslanSearchResult[] } }>({
-    queryKey: ["/api/arslan/search", title],
+  const { data: mbSearchForTmdb } = useQuery<{ code: number; data: { items: MovieBoxItem[] } }>({
+    queryKey: ["/api/wolfmovieapi/search-for-tmdb", title],
     queryFn: async () => {
-      const res = await fetch(`/api/arslan/search?text=${encodeURIComponent(title)}`);
+      const res = await fetch(`/api/wolfmovieapi/search?keyword=${encodeURIComponent(title)}&page=1&perPage=10`);
       if (!res.ok) throw new Error("Search failed");
       return res.json();
     },
-    enabled: !!title && title.length > 1,
+    enabled: !isMovieBox && !!title && title.length > 1,
   });
 
-  const arslanResults = arslanSearch?.result?.data || [];
-  const bestMatch = selectedSource || (arslanResults.length > 0 ? arslanResults[0].link : null);
+  const tmdbMbMatch = useMemo(() => {
+    if (isMovieBox) return null;
+    if (!mbSearchForTmdb?.data?.items) return null;
+    const lowerTitle = title.toLowerCase();
+    return mbSearchForTmdb.data.items.find(r =>
+      r.title.toLowerCase() === lowerTitle
+    ) || mbSearchForTmdb.data.items[0] || null;
+  }, [mbSearchForTmdb, title, isMovieBox]);
 
-  const { data: arslanDetail, isLoading: detailLoading } = useQuery<{ result?: { data?: ArslanMovieDetail } }>({
-    queryKey: ["/api/arslan/movie", bestMatch],
+  const effectiveSubjectId = isMovieBox ? id : (tmdbMbMatch?.subjectId ? String(tmdbMbMatch.subjectId) : null);
+
+  const { data: streamDomainData } = useQuery<{ code: number; data: string }>({
+    queryKey: ["/api/wolfmovieapi/stream-domain"],
     queryFn: async () => {
-      const res = await fetch(`/api/arslan/movie?url=${encodeURIComponent(bestMatch!)}`);
-      if (!res.ok) throw new Error("Details failed");
+      const res = await fetch("/api/wolfmovieapi/stream-domain");
+      if (!res.ok) throw new Error("Failed to fetch stream domain");
       return res.json();
     },
-    enabled: !!bestMatch,
+    staleTime: 1000 * 60 * 30,
   });
 
-  const movieDetail = arslanDetail?.result?.data;
-  const dlLinks = (movieDetail?.dl_links || []).map(link => ({
-    ...link,
-    link: decodeHtmlEntities(link.link),
-  }));
+  const streamDomain = streamDomainData?.data || "https://123movienow.cc";
+  const cleanStreamDomain = streamDomain.replace(/\/$/, "");
+
+  const movieBoxPlayerUrl = useMemo(() => {
+    if (!effectiveSubjectId) return "";
+    const se = type === "tv" ? selectedSeason : 0;
+    const ep = type === "tv" ? selectedEpisode : 0;
+    return `${cleanStreamDomain}/spa/videoPlayPage/movies/${effectiveSubjectId}?se=${se}&ep=${ep}`;
+  }, [effectiveSubjectId, type, selectedSeason, selectedEpisode, cleanStreamDomain]);
+
+  const tmdbId = isMovieBox ? null : id;
+
+  const embedServers = useMemo(() => {
+    if (!tmdbId) return [];
+    const mediaType = type === "tv" ? "tv" : "movie";
+    return [
+      {
+        name: "VidSrc",
+        url: `https://vidsrc.icu/embed/${mediaType}/${tmdbId}${type === "tv" ? `/${selectedSeason}/${selectedEpisode}` : ""}`,
+      },
+      {
+        name: "MultiEmbed",
+        url: `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1${type === "tv" ? `&s=${selectedSeason}&e=${selectedEpisode}` : ""}`,
+      },
+      {
+        name: "SuperEmbed",
+        url: `https://getsuperembed.link/?video_id=${tmdbId}&tmdb=1${type === "tv" ? `&s=${selectedSeason}&e=${selectedEpisode}` : ""}`,
+      },
+    ];
+  }, [tmdbId, type, selectedSeason, selectedEpisode]);
+
+  const allServers = useMemo(() => {
+    const servers: { name: string; url: string; source: string }[] = [];
+    if (movieBoxPlayerUrl) {
+      servers.push({ name: "MovieBox Player", url: movieBoxPlayerUrl, source: "moviebox" });
+    }
+    if (!isMovieBox) {
+      embedServers.forEach(s => {
+        servers.push({ ...s, source: "embed" });
+      });
+    }
+    return servers;
+  }, [movieBoxPlayerUrl, embedServers, isMovieBox]);
+
+  const activeServerUrl = allServers[selectedServer]?.url || "";
 
   const posterUrl = isMovieBox
     ? (effectiveMbItem ? getMovieBoxCover(effectiveMbItem) : "")
@@ -246,6 +234,23 @@ export default function Watch() {
 
   const mbRelated = mbDetailRec?.data?.items || [];
 
+  const seasonCount = useMemo(() => {
+    if (isMovieBox && effectiveMbItem?.season) {
+      const s = effectiveMbItem.season;
+      if (Array.isArray(s)) return s.length;
+      if (typeof s === "number") return s;
+    }
+    if (!isMovieBox && tmdbData?.number_of_seasons) {
+      return tmdbData.number_of_seasons;
+    }
+    if (tmdbMbMatch?.season) {
+      const s = tmdbMbMatch.season;
+      if (typeof s === "number") return s;
+      if (Array.isArray(s)) return s.length;
+    }
+    return 0;
+  }, [isMovieBox, effectiveMbItem, tmdbData, tmdbMbMatch]);
+
   const navigateRelated = (direction: "prev" | "next") => {
     if (mbRelated.length === 0) return;
     const currentIdx = mbRelated.findIndex(r => String(r.subjectId) === String(id));
@@ -265,6 +270,9 @@ export default function Watch() {
       </div>
     );
   }
+
+  const isSearching = !isMovieBox && !tmdbMbMatch && !!title;
+  const hasServers = allServers.length > 0;
 
   return (
     <div className="min-h-screen bg-black">
@@ -369,9 +377,9 @@ export default function Watch() {
                 </p>
               )}
 
-              {isMovieBox && effectiveMbItem?.season && effectiveMbItem.season.length > 0 && (
+              {isMovieBox && seasonCount > 0 && (
                 <p className="text-xs font-mono text-gray-500 mb-4" data-testid="text-seasons-mb">
-                  {effectiveMbItem.season.length} Season{effectiveMbItem.season.length > 1 ? "s" : ""}
+                  {seasonCount} Season{seasonCount > 1 ? "s" : ""}
                 </p>
               )}
 
@@ -387,57 +395,112 @@ export default function Watch() {
             </div>
           </div>
 
+          {type === "tv" && seasonCount > 0 && (
+            <GlassPanel className="mb-6">
+              <h3 className="text-sm font-display font-bold text-white mb-3 flex items-center gap-2" data-testid="text-season-selector">
+                <Tv2 className="w-4 h-4 text-green-400" />
+                Season & Episode
+              </h3>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-gray-400">Season:</span>
+                  <div className="flex gap-1 flex-wrap">
+                    {Array.from({ length: seasonCount }, (_, i) => (
+                      <Button
+                        key={i}
+                        size="sm"
+                        variant={selectedSeason === (i + 1) ? "default" : "ghost"}
+                        onClick={() => { setSelectedSeason(i + 1); setSelectedEpisode(1); }}
+                        className={`font-mono text-xs ${selectedSeason === (i + 1) ? "bg-green-600 text-white" : "text-gray-400"}`}
+                        data-testid={`button-season-${i + 1}`}
+                      >
+                        S{i + 1}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-gray-400">Episode:</span>
+                  <div className="flex gap-1 flex-wrap">
+                    {Array.from({ length: 20 }, (_, i) => i + 1).map(ep => (
+                      <Button
+                        key={ep}
+                        size="sm"
+                        variant={selectedEpisode === ep ? "default" : "ghost"}
+                        onClick={() => { setSelectedEpisode(ep); }}
+                        className={`font-mono text-xs ${selectedEpisode === ep ? "bg-green-600 text-white" : "text-gray-400"}`}
+                        data-testid={`button-episode-${ep}`}
+                      >
+                        E{ep}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </GlassPanel>
+          )}
+
           <GlassPanel className="mb-8">
             <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
               <h2 className="text-lg font-display font-bold text-white flex items-center gap-2" data-testid="text-stream-heading">
                 <Play className="w-5 h-5 text-green-400" />
                 Stream Now
+                {allServers[selectedServer] && (
+                  <Badge variant="outline" className="text-green-400 border-green-500/20 bg-green-500/10 font-mono ml-2">
+                    {allServers[selectedServer].name}
+                  </Badge>
+                )}
               </h2>
-              <div className="flex items-center gap-1 flex-wrap">
-                {STREAM_SERVERS.map((server, idx) => {
-                  const Icon = server.icon;
-                  return (
+              {allServers.length > 1 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {allServers.map((server, i) => (
                     <Button
-                      key={server.id}
+                      key={i}
                       size="sm"
-                      variant={activeServer === server.id ? "default" : "ghost"}
-                      onClick={() => { setActiveServer(server.id); setIsStopped(false); }}
-                      className={`font-mono text-xs ${activeServer === server.id ? "bg-green-600 text-white" : "text-gray-400"}`}
-                      data-testid={`button-server-${server.id}`}
+                      variant={selectedServer === i ? "default" : "ghost"}
+                      onClick={() => setSelectedServer(i)}
+                      className={`font-mono text-xs ${selectedServer === i ? "bg-green-600 text-white" : "text-gray-400"}`}
+                      data-testid={`button-server-${i}`}
                     >
-                      <Icon className="w-3 h-3 mr-1" />
-                      Server {idx + 1}
+                      <Server className="w-3 h-3 mr-1" />
+                      {server.name}
                     </Button>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {!streamUrl ? (
+            {isSearching ? (
               <div className="w-full aspect-video rounded-t-xl border border-green-500/20 border-b-0 bg-black flex items-center justify-center">
                 <div className="text-center">
                   <Loader2 className="w-10 h-10 text-green-500/30 mx-auto mb-3 animate-spin" />
-                  <p className="text-sm font-mono text-gray-500">{isMovieBox ? "Searching for stream source..." : "Loading stream source..."}</p>
-                  <p className="text-xs font-mono text-gray-600 mt-1">Try switching servers above if playback doesn't start</p>
+                  <p className="text-sm font-mono text-gray-500" data-testid="text-loading-stream">
+                    Searching MovieBox for this title...
+                  </p>
+                  <p className="text-xs font-mono text-gray-600 mt-1">Finding the best source</p>
+                </div>
+              </div>
+            ) : !hasServers ? (
+              <div className="w-full aspect-video rounded-t-xl border border-green-500/20 border-b-0 bg-black flex items-center justify-center">
+                <div className="text-center">
+                  <Search className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
+                  <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
+                    No streaming source found for this title
+                  </p>
+                  <p className="text-xs font-mono text-gray-600 mt-1">Try browsing MovieBox content directly</p>
                 </div>
               </div>
             ) : (
               <div ref={playerContainerRef} className="relative w-full aspect-video rounded-t-xl overflow-hidden border border-green-500/20 border-b-0 bg-black">
-                {isStopped && (
-                  <div className="absolute inset-0 z-10 bg-black/70 flex items-center justify-center cursor-pointer" onClick={() => setIsStopped(false)}>
-                    <div className="text-center">
-                      <Play className="w-16 h-16 text-green-400 mx-auto mb-2" />
-                      <p className="text-sm font-mono text-gray-400">Click to Resume</p>
-                    </div>
-                  </div>
-                )}
                 <iframe
                   ref={iframeRef}
-                  src={isStopped ? "about:blank" : streamUrl}
+                  key={activeServerUrl}
+                  src={activeServerUrl}
                   className="absolute inset-0 w-full h-full"
                   allowFullScreen
-                  allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-                  referrerPolicy="origin"
+                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                  referrerPolicy="no-referrer"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
                   data-testid="iframe-player"
                 />
               </div>
@@ -458,15 +521,6 @@ export default function Watch() {
                 <Button
                   size="icon"
                   variant="ghost"
-                  onClick={() => setIsStopped(!isStopped)}
-                  className="text-white"
-                  data-testid="button-pause"
-                >
-                  {isStopped ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
                   onClick={() => navigateRelated("next")}
                   className="text-gray-400"
                   disabled={mbRelated.length === 0}
@@ -479,6 +533,7 @@ export default function Watch() {
               <div className="flex-1 text-center">
                 <p className="text-xs font-mono text-gray-400 truncate" data-testid="text-now-playing">
                   {title || "Now Playing"}
+                  {allServers[selectedServer] && ` - ${allServers[selectedServer].name}`}
                 </p>
               </div>
 
@@ -491,7 +546,7 @@ export default function Watch() {
                   data-testid="button-toggle-downloads"
                 >
                   <Download className="w-4 h-4 mr-1" />
-                  Download
+                  Downloads
                   <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showDownloads ? "rotate-180" : ""}`} />
                 </Button>
                 <Button
@@ -511,80 +566,16 @@ export default function Watch() {
             <GlassPanel className="mb-8">
               <h2 className="text-lg font-display font-bold text-white flex items-center gap-2 mb-4" data-testid="text-download-heading">
                 <Download className="w-5 h-5 text-green-400" />
-                Download Links
+                Downloads
               </h2>
-
-              {arslanSearching || detailLoading ? (
-                <div className="flex items-center gap-3 py-8 justify-center">
-                  <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
-                  <span className="text-sm font-mono text-gray-400" data-testid="text-searching">Searching for download sources...</span>
-                </div>
-              ) : dlLinks.length > 0 ? (
-                <div className="space-y-3">
-                  {dlLinks.map((link, i) => (
-                    <a
-                      key={i}
-                      href={link.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between gap-4 p-4 rounded-xl bg-black/40 border border-green-500/10 hover-elevate transition-colors"
-                      data-testid={`link-download-${i}`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                          <Download className="w-5 h-5 text-green-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-mono font-bold text-white truncate" data-testid={`text-quality-${i}`}>{link.quality}</p>
-                          {link.size && link.size !== "----" && (
-                            <p className="text-xs font-mono text-gray-500" data-testid={`text-size-${i}`}>{link.size}</p>
-                          )}
-                        </div>
-                      </div>
-                      <ExternalLink className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                    </a>
-                  ))}
-                </div>
-              ) : arslanResults.length === 0 && !arslanSearching ? (
-                <div className="text-center py-8">
-                  <Search className="w-8 h-8 text-green-500/20 mx-auto mb-3" />
-                  <p className="text-sm font-mono text-gray-500" data-testid="text-no-downloads">No download sources found for this title</p>
-                  <p className="text-xs font-mono text-gray-600 mt-1">Try using the stream player above</p>
-                </div>
-              ) : null}
-
-              {arslanResults.length > 1 && (
-                <div className="mt-6 pt-4 border-t border-green-500/10">
-                  <p className="text-xs font-mono text-gray-500 mb-3" data-testid="text-other-sources">Other sources found:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {arslanResults.map((result, i) => (
-                      <Button
-                        key={i}
-                        variant="ghost"
-                        onClick={() => setSelectedSource(result.link)}
-                        className={`text-left h-auto p-3 justify-start font-mono text-xs ${
-                          bestMatch === result.link
-                            ? "border border-green-500/40 bg-green-500/10 text-green-400"
-                            : "border border-green-500/10 text-gray-400"
-                        }`}
-                        data-testid={`button-source-${i}`}
-                      >
-                        <div className="min-w-0 w-full">
-                          <p className="truncate font-bold" data-testid={`text-source-title-${i}`}>{result.title}</p>
-                          <p className="text-gray-600 mt-0.5">{result.year} / {result.type} / IMDB {result.imdb}</p>
-                        </div>
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <DownloadSection title={title} effectiveSubjectId={effectiveSubjectId} />
             </GlassPanel>
           )}
 
           {mbRelated.length > 0 && (
             <GlassPanel className="mb-8">
               <h2 className="text-lg font-display font-bold text-white flex items-center gap-2 mb-4" data-testid="text-related-heading">
-                <Subtitles className="w-5 h-5 text-green-400" />
+                <Film className="w-5 h-5 text-green-400" />
                 Related Content
               </h2>
               <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
@@ -598,4 +589,91 @@ export default function Watch() {
       </div>
     </div>
   );
+}
+
+function DownloadSection({ title, effectiveSubjectId }: { title: string; effectiveSubjectId: string | null }) {
+  const { data: arslanSearch, isLoading: arslanLoading } = useQuery<{ results?: { title: string; url: string }[] }>({
+    queryKey: ["/api/arslan/search", title],
+    queryFn: async () => {
+      const res = await fetch(`/api/arslan/search?text=${encodeURIComponent(title)}`);
+      if (!res.ok) throw new Error("Search failed");
+      return res.json();
+    },
+    enabled: !!title && title.length > 1,
+  });
+
+  const firstResult = arslanSearch?.results?.[0];
+
+  const { data: arslanMovie, isLoading: arslanMovieLoading } = useQuery<{ title?: string; links?: { quality: string; size: string; url: string }[] }>({
+    queryKey: ["/api/arslan/movie", firstResult?.url],
+    queryFn: async () => {
+      const res = await fetch(`/api/arslan/movie?url=${encodeURIComponent(firstResult!.url)}`);
+      if (!res.ok) throw new Error("Movie details failed");
+      return res.json();
+    },
+    enabled: !!firstResult?.url,
+  });
+
+  const downloadLinks = arslanMovie?.links || [];
+  const isLoading = arslanLoading || arslanMovieLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-3 py-8 justify-center">
+        <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
+        <span className="text-sm font-mono text-gray-400" data-testid="text-searching-downloads">Searching for download links...</span>
+      </div>
+    );
+  }
+
+  if (downloadLinks.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Download className="w-8 h-8 text-green-500/20 mx-auto mb-3" />
+        <p className="text-sm font-mono text-gray-500" data-testid="text-no-downloads">No download links found</p>
+        <p className="text-xs font-mono text-gray-600 mt-1">Downloads may not be available for this title</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {downloadLinks.map((dl, i) => {
+        const decodedUrl = decodeHtmlEntities(dl.url);
+        return (
+          <a
+            key={i}
+            href={decodedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between gap-4 p-4 rounded-xl bg-black/40 border border-green-500/10 hover-elevate transition-colors"
+            data-testid={`link-download-${i}`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                <Download className="w-5 h-5 text-green-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-mono font-bold text-white" data-testid={`text-quality-${i}`}>
+                  {dl.quality || "Download"}
+                </p>
+                {dl.size && (
+                  <p className="text-xs font-mono text-gray-500" data-testid={`text-size-${i}`}>
+                    {dl.size}
+                  </p>
+                )}
+              </div>
+            </div>
+            <ExternalLink className="w-4 h-4 text-gray-500 flex-shrink-0" />
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function decodeHtmlEntities(html: string): string {
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = html;
+  return textarea.value;
 }

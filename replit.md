@@ -51,16 +51,20 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 
 ## Streaming
 - Clicking any content card navigates to `/watch/:type/:id`
-- Multi-server streaming with 4 embed sources (all use TMDB IDs):
-  - Server 1: VidSrc (`vidsrc.icu/embed/{movie|tv}/{tmdb_id}`)
-  - Server 2: MultiEmbed (`multiembed.mov/?video_id={tmdb_id}&tmdb=1`)
-  - Server 3: SuperEmbed (`getsuperembed.link/?video_id={tmdb_id}&tmdb=1`)
-  - Server 4: VidSrc.me (`vidsrc.net/embed/{movie|tv}/{tmdb_id}`)
-- For MovieBox items: searches TMDB by title to find the TMDB ID, then uses same embed servers
+- **MovieBox Native Player**: Uses MovieBox's own streaming domain (`123movienow.cc`) as primary player
+  - URL format: `{streamDomain}/spa/videoPlayPage/movies/{subjectId}?se={season}&ep={episode}`
+  - Streaming domain fetched dynamically from MovieBox API (`/media-player/get-domain`)
+  - Player runs in iframe and makes API calls from user's browser (bypasses datacenter geo-restrictions)
+  - Note: MovieBox's play/download API endpoints are geo-restricted from datacenter IPs. The iframe approach works because API calls originate from the user's browser IP.
+- **TMDB Embed Servers** (fallback for TMDB-sourced content only):
+  - VidSrc (`vidsrc.icu/embed/{movie|tv}/{tmdb_id}`)
+  - MultiEmbed (`multiembed.mov/?video_id={tmdb_id}&tmdb=1`)
+  - SuperEmbed (`getsuperembed.link/?video_id={tmdb_id}&tmdb=1`)
+- For MovieBox items: MovieBox native player is primary, no embed fallback
+- For TMDB items: Searches MovieBox by title to find subjectId, offers MovieBox player + embed servers
 - MovieBox items navigate with `?source=moviebox` and store item data in sessionStorage
 - Recovery mechanism: When sessionStorage clears after refresh, searches MovieBox by title/subjectId to recover detailPath
 - Fullscreen toggle button on the player using browser Fullscreen API
-- Stop/Resume control (sets iframe src to about:blank / restores stream URL)
 - Download links fetched from Arslan API by searching movie title
 - HTML entity decoding for download URLs using textarea helper
 - Multiple download sources with quality/size info

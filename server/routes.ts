@@ -7,6 +7,8 @@ const ARSLAN_BASE = "https://arslan-apis.vercel.app/movie";
 
 const MOVIEBOX_API = "https://h5-api.aoneroom.com/wefeed-h5api-bff";
 
+const UA = "Mozilla/5.0 (X11; Linux x86_64; rv:137.0) Gecko/20100101 Firefox/137.0";
+
 let movieboxToken: string | null = null;
 let tokenExpiry = 0;
 
@@ -14,7 +16,7 @@ async function getMovieboxToken(): Promise<string> {
   if (movieboxToken && Date.now() < tokenExpiry) return movieboxToken;
   const res = await fetch(
     `${MOVIEBOX_API}/web/get-page-tdk?page_key=home&site_key=moviebox`,
-    { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } }
+    { headers: { "User-Agent": UA } }
   );
   const xUser = res.headers.get("x-user");
   if (xUser) {
@@ -32,7 +34,7 @@ async function movieboxGet(path: string): Promise<any> {
   const res = await fetch(url, {
     headers: {
       "Accept": "application/json",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "User-Agent": UA,
       "X-Client-Token": token,
       "X-Request-Lang": "en",
     },
@@ -49,7 +51,7 @@ async function movieboxPost(path: string, body: any): Promise<any> {
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "User-Agent": UA,
       "X-Client-Token": token,
       "X-Request-Lang": "en",
     },
@@ -187,6 +189,7 @@ export async function registerRoutes(
       res.status(500).json({ error: e.message });
     }
   });
+
 
   // =============================================
   // TMDB Endpoints (kept for compatibility)
