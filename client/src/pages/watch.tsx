@@ -26,6 +26,7 @@ export default function Watch() {
   const [episode, setEpisode] = useState(1);
   const [renderCount, setRenderCount] = useState(0);
   const [activeSource, setActiveSource] = useState(0);
+  const [iframeLoading, setIframeLoading] = useState(true);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerSectionRef = useRef<HTMLDivElement>(null);
   const prevIdRef = useRef(id);
@@ -37,6 +38,7 @@ export default function Watch() {
     setRenderCount(0);
     setShowDownloads(false);
     setActiveSource(0);
+    setIframeLoading(true);
   }
 
   const scrollToPlayer = useCallback(() => {
@@ -94,6 +96,7 @@ export default function Watch() {
     setSeason(newSeason);
     setEpisode(newEpisode);
     setRenderCount(c => c + 1);
+    setIframeLoading(true);
     scrollToPlayer();
   }, [scrollToPlayer]);
 
@@ -288,14 +291,24 @@ export default function Watch() {
                 </div>
               ) : (
                 <div ref={playerContainerRef} className="relative w-full aspect-video bg-black">
+                  {iframeLoading && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black">
+                      <div className="relative mb-4">
+                        <div className="w-12 h-12 rounded-full border-2 border-green-500/20 border-t-green-500 animate-spin" />
+                        <Play className="absolute inset-0 m-auto w-5 h-5 text-green-500" />
+                      </div>
+                      <p className="text-sm font-mono text-gray-400">Loading player...</p>
+                      <p className="text-xs font-mono text-gray-600 mt-1">Connecting to stream</p>
+                    </div>
+                  )}
                   <iframe
                     key={`player-${season}-${episode}-${renderCount}-${activeSource}`}
                     src={playerUrl}
                     className="absolute inset-0 w-full h-full"
                     allowFullScreen
-                    allow="autoplay; fullscreen; encrypted-media"
-                    referrerPolicy="origin"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-popups"
+                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                    referrerPolicy="no-referrer"
+                    onLoad={() => setIframeLoading(false)}
                     data-testid="iframe-player"
                   />
                 </div>
