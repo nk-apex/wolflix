@@ -340,7 +340,7 @@ export default function Watch() {
                       if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
                       splashTimerRef.current = setTimeout(() => {
                         setSplashDone(true);
-                      }, 8000);
+                      }, 15000);
                     }}
                     data-testid="iframe-player"
                   />
