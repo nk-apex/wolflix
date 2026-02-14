@@ -57,16 +57,12 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `search?text=`, `movie?url=`, `tvshow?url=`, `episode?url=` - Subtitle sources
 
 ## Streaming
-- **Multiple embed sources** with user-selectable server buttons below player:
-  - Server 1 (Fast): `multiembed.mov/?video_id={imdb_id}` (default, fastest)
-  - Server 2 (HLS): `multiembed.mov/directstream.php?video_id={imdb_id}` (adaptive quality)
-  - Server 3: `player.autoembed.cc/embed/movie/{imdb_id}` (AutoEmbed fallback)
-  - Server 4: `vidsrc.cc/v3/embed/movie/{imdb_id}` (VidSrc)
+- **AutoEmbed** (player.autoembed.cc) single source
 - Uses IMDB IDs (tt-prefixed) from API
 - No splash/loading screen - direct iframe display
 - TV show season/episode navigation with auto-advance
 - Download links via download API
-- DNS preconnect hints for multiembed.mov, player.autoembed.cc, vidsrc.cc
+- DNS preconnect hints for player.autoembed.cc
 
 ## Error Handling
 - Server returns 502 with friendly messages on upstream failures

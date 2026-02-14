@@ -8,10 +8,7 @@ import { GlassCard, GlassPanel } from "@/components/glass-card";
 import { type BWMDetail, getRating, getPosterUrl } from "@/lib/tmdb";
 
 const EMBED_SOURCES = [
-  { name: "Server 1 (Fast)", buildUrl: (id: string, type: string, s: number, e: number) => type === "tv" ? `https://multiembed.mov/?video_id=${id}&s=${s}&e=${e}` : `https://multiembed.mov/?video_id=${id}` },
-  { name: "Server 2 (HLS)", buildUrl: (id: string, type: string, s: number, e: number) => type === "tv" ? `https://multiembed.mov/directstream.php?video_id=${id}&s=${s}&e=${e}` : `https://multiembed.mov/directstream.php?video_id=${id}` },
-  { name: "Server 3", buildUrl: (id: string, type: string, s: number, e: number) => type === "tv" ? `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}` : `https://player.autoembed.cc/embed/movie/${id}` },
-  { name: "Server 4", buildUrl: (id: string, type: string, s: number, e: number) => type === "tv" ? `https://vidsrc.cc/v3/embed/tv/${id}/${s}/${e}` : `https://vidsrc.cc/v3/embed/movie/${id}` },
+  { name: "Server 1", buildUrl: (id: string, type: string, s: number, e: number) => type === "tv" ? `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}` : `https://player.autoembed.cc/embed/movie/${id}` },
 ];
 
 export default function Watch() {
@@ -28,7 +25,6 @@ export default function Watch() {
   const [season, setSeason] = useState(1);
   const [episode, setEpisode] = useState(1);
   const [renderCount, setRenderCount] = useState(0);
-  const [sourceIndex, setSourceIndex] = useState(0);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerSectionRef = useRef<HTMLDivElement>(null);
   const prevIdRef = useRef(id);
@@ -45,8 +41,8 @@ export default function Watch() {
 
   const playerUrl = useMemo(() => {
     if (!id) return "";
-    return EMBED_SOURCES[sourceIndex].buildUrl(id, type, season, episode);
-  }, [id, type, season, episode, sourceIndex]);
+    return EMBED_SOURCES[0].buildUrl(id, type, season, episode);
+  }, [id, type, season, episode]);
 
   const scrollToPlayer = useCallback(() => {
     setTimeout(() => {
@@ -220,7 +216,7 @@ export default function Watch() {
             </div>
           </div>
 
-          <GlassPanel className="mb-2 p-0 overflow-hidden">
+          <GlassPanel className="mb-4 p-0 overflow-hidden">
             {!playerUrl ? (
               <div className="w-full aspect-video bg-black flex items-center justify-center">
                 <div className="text-center">
@@ -233,7 +229,7 @@ export default function Watch() {
             ) : (
               <div ref={playerContainerRef} className="relative w-full aspect-video bg-black">
                 <iframe
-                  key={`player-${sourceIndex}-${season}-${episode}-${renderCount}`}
+                  key={`player-${season}-${episode}-${renderCount}`}
                   src={playerUrl}
                   className="absolute inset-0 w-full h-full"
                   allowFullScreen
@@ -245,22 +241,6 @@ export default function Watch() {
               </div>
             )}
           </GlassPanel>
-
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span className="text-xs font-mono text-gray-500 mr-1">Source:</span>
-            {EMBED_SOURCES.map((source, idx) => (
-              <Button
-                key={idx}
-                size="sm"
-                variant={idx === sourceIndex ? "default" : "outline"}
-                onClick={() => { setSourceIndex(idx); setRenderCount(c => c + 1); }}
-                className={idx === sourceIndex ? "bg-green-600 text-black font-mono text-xs" : "border-green-500/30 text-green-400 font-mono text-xs"}
-                data-testid={`button-source-${idx}`}
-              >
-                {source.name}
-              </Button>
-            ))}
-          </div>
         </div>
 
         {showDownloads && (
