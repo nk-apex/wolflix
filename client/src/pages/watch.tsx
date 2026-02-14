@@ -31,6 +31,8 @@ export default function Watch() {
   const [episode, setEpisode] = useState(1);
   const [renderCount, setRenderCount] = useState(0);
   const [playerLoaded, setPlayerLoaded] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
+  const splashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerSectionRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -43,6 +45,8 @@ export default function Watch() {
     setRenderCount(0);
     setShowDownloads(false);
     setPlayerLoaded(false);
+    setSplashDone(false);
+    if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
   }
 
   const scrollToPlayer = useCallback(() => {
@@ -64,6 +68,12 @@ export default function Watch() {
     const handler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
+    };
   }, []);
 
   const { data: bwmDetail, isLoading: detailLoading } = useQuery<BWMDetail>({
@@ -101,6 +111,8 @@ export default function Watch() {
     setEpisode(newEpisode);
     setRenderCount(c => c + 1);
     setPlayerLoaded(false);
+    setSplashDone(false);
+    if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
     scrollToPlayer();
   }, [scrollToPlayer]);
 
@@ -300,8 +312,8 @@ export default function Watch() {
                 </div>
               ) : (
                 <div ref={playerContainerRef} className="relative w-full aspect-video bg-black">
-                  {!playerLoaded && (
-                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black" data-testid="player-splash">
+                  {!splashDone && (
+                    <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center bg-black transition-opacity duration-700 ${playerLoaded && splashDone ? "opacity-0 pointer-events-none" : "opacity-100"}`} data-testid="player-splash">
                       <div className="relative mb-6">
                         <div className="absolute inset-0 -m-4 rounded-full border-[3px] border-transparent border-t-green-500 animate-spin" style={{ width: "calc(100% + 2rem)", height: "calc(100% + 2rem)", top: "-1rem", left: "-1rem" }} />
                         <div className="absolute inset-0 -m-7 rounded-full border-[2px] border-transparent border-b-green-400/60 animate-spin" style={{ width: "calc(100% + 3.5rem)", height: "calc(100% + 3.5rem)", top: "-1.75rem", left: "-1.75rem", animationDirection: "reverse", animationDuration: "1.5s" }} />
@@ -318,12 +330,18 @@ export default function Watch() {
                     ref={iframeRef}
                     key={`player-${season}-${episode}-${renderCount}`}
                     src={playerUrl}
-                    className={`absolute inset-0 w-full h-full transition-opacity duration-500 ${playerLoaded ? "opacity-100" : "opacity-0"}`}
+                    className={`absolute inset-0 w-full h-full transition-opacity duration-700 ${splashDone ? "opacity-100" : "opacity-0"}`}
                     allowFullScreen
                     allow="autoplay; fullscreen; encrypted-media"
                     referrerPolicy="origin"
                     sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
-                    onLoad={() => setPlayerLoaded(true)}
+                    onLoad={() => {
+                      setPlayerLoaded(true);
+                      if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
+                      splashTimerRef.current = setTimeout(() => {
+                        setSplashDone(true);
+                      }, 8000);
+                    }}
                     data-testid="iframe-player"
                   />
                 </div>
