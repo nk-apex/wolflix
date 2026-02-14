@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Play, Download, ArrowLeft, Star, Calendar, Clock, Search, Maximize, Minimize, ChevronDown, SkipBack, SkipForward, Tv2, Loader2, ExternalLink } from "lucide-react";
@@ -25,21 +25,33 @@ export default function Watch() {
   const [season, setSeason] = useState(1);
   const [episode, setEpisode] = useState(1);
   const [renderCount, setRenderCount] = useState(0);
-  const [activeSource, setActiveSource] = useState(0);
   const [iframeLoading, setIframeLoading] = useState(true);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerSectionRef = useRef<HTMLDivElement>(null);
   const prevIdRef = useRef(id);
 
-  if (prevIdRef.current !== id) {
-    prevIdRef.current = id;
-    setSeason(1);
-    setEpisode(1);
-    setRenderCount(0);
-    setShowDownloads(false);
-    setActiveSource(0);
+  useEffect(() => {
+    if (prevIdRef.current !== id) {
+      prevIdRef.current = id;
+      setSeason(1);
+      setEpisode(1);
+      setRenderCount(0);
+      setShowDownloads(false);
+      setIframeLoading(true);
+    }
+  }, [id]);
+
+  const playerUrl = useMemo(() => {
+    if (!id) return "";
+    return EMBED_SOURCES[0].buildUrl(id, type, season, episode);
+  }, [id, type, season, episode]);
+
+  useEffect(() => {
+    if (!playerUrl) return;
     setIframeLoading(true);
-  }
+    const timer = setTimeout(() => setIframeLoading(false), 4000);
+    return () => clearTimeout(timer);
+  }, [playerUrl, renderCount]);
 
   const scrollToPlayer = useCallback(() => {
     setTimeout(() => {
@@ -65,6 +77,9 @@ export default function Watch() {
   const { data: bwmDetail, isLoading: detailLoading } = useQuery<BWMDetail>({
     queryKey: ["/api/silentwolf/title", id],
     enabled: !!id && id.startsWith("tt"),
+    retry: 1,
+    retryDelay: 1000,
+    staleTime: 10 * 60 * 1000,
   });
 
   const title = zoneTitle || bwmDetail?.primaryTitle || id;
@@ -86,8 +101,6 @@ export default function Watch() {
       setEpisode(episodeCount);
     }
   }, [episodeCount, episode]);
-
-  const playerUrl = id ? EMBED_SOURCES[activeSource].buildUrl(id, type, season, episode) : "";
 
   const isFirstEpisode = season <= 1 && episode <= 1;
   const isLastEpisode = season >= seasonCount && episode >= episodeCount;
@@ -134,275 +147,271 @@ export default function Watch() {
 
   return (
     <div className="min-h-screen bg-black">
-      <div className="relative">
-        {posterUrl && (
-          <div className="absolute inset-0 h-[500px]">
-            <img src={posterUrl} alt="" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black" />
+      <div className="relative z-10 px-4 lg:px-6 py-4 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-3 gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/")}
+              className="text-gray-400 flex-shrink-0"
+              data-testid="button-back"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <h1 className="text-lg lg:text-xl font-display font-bold text-white truncate" data-testid="text-watch-title">
+              {zoneTitle || bwmDetail?.primaryTitle || "Loading..."}
+            </h1>
           </div>
-        )}
-
-        <div className="relative z-10 px-6 py-6 max-w-7xl mx-auto">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/")}
-            className="mb-6 text-gray-400 font-mono"
-            data-testid="button-back"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-
-          <div className="flex flex-col lg:flex-row gap-8 mb-8">
-            {posterUrl && (
-              <div className="flex-shrink-0">
-                <GlassCard hover={false} className="overflow-hidden w-[250px]">
-                  <img src={posterUrl} alt={title} className="w-full rounded-[1rem]" data-testid="img-poster" />
-                </GlassCard>
-              </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {type === "tv" && (
+              <span className="text-sm font-mono text-green-400 mr-2" data-testid="text-current-playing">
+                S{season}E{episode}
+              </span>
             )}
+          </div>
+        </div>
 
-            <div className="flex-1 min-w-0">
-              {detailLoading && id.startsWith("tt") ? (
-                <div className="flex items-center gap-3 py-4">
-                  <Loader2 className="w-5 h-5 text-green-500 animate-spin" />
-                  <span className="text-sm font-mono text-gray-400">Loading details...</span>
-                </div>
-              ) : (
+        <div ref={playerSectionRef}>
+          <div className="flex items-center justify-between gap-3 mb-2 px-1 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              {type === "tv" && (
                 <>
-                  <h1 className="text-3xl lg:text-4xl font-display font-bold text-white mb-3" data-testid="text-watch-title">{title || `Content #${id}`}</h1>
-
-                  <div className="flex flex-wrap items-center gap-3 mb-4">
-                    {rating > 0 && (
-                      <span className="flex items-center gap-1 text-sm font-mono text-green-400" data-testid="text-rating">
-                        <Star className="w-4 h-4 fill-green-400" />
-                        {rating.toFixed(1)}
-                      </span>
-                    )}
-                    {year && (
-                      <span className="flex items-center gap-1 text-sm font-mono text-gray-400" data-testid="text-year">
-                        <Calendar className="w-4 h-4" />
-                        {year}
-                      </span>
-                    )}
-                    {duration > 0 && (
-                      <span className="flex items-center gap-1 text-sm font-mono text-gray-400" data-testid="text-runtime">
-                        <Clock className="w-4 h-4" />
-                        {duration} min
-                      </span>
-                    )}
-                  </div>
-
-                  {genres.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {genres.map((g) => (
-                        <Badge key={g} variant="outline" className="text-green-300 border-green-500/15 bg-green-500/10 font-mono" data-testid={`badge-genre-${g}`}>
-                          {g}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-
-                  {description && (
-                    <p className="text-sm text-gray-300 leading-relaxed mb-6 max-w-2xl" data-testid="text-watch-overview">
-                      {description}
-                    </p>
-                  )}
-
-                  {seasonCount > 0 && (
-                    <p className="text-xs font-mono text-gray-500 mb-4" data-testid="text-seasons">
-                      {seasonCount} Seasons {totalEpisodes > 0 ? `/ ${totalEpisodes} Episodes` : ""}
-                    </p>
-                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={goPrev}
+                    disabled={isFirstEpisode}
+                    className="border-green-500/30 text-green-400 font-mono gap-1"
+                    data-testid="button-prev-episode"
+                  >
+                    <SkipBack className="w-4 h-4" />
+                    Prev
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={goNext}
+                    disabled={isLastEpisode}
+                    className="border-green-500/30 text-green-400 font-mono gap-1"
+                    data-testid="button-next-episode"
+                  >
+                    Next
+                    <SkipForward className="w-4 h-4" />
+                  </Button>
                 </>
               )}
             </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowDownloads(!showDownloads)}
+                className="text-green-400 font-mono text-xs"
+                data-testid="button-toggle-downloads"
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Downloads
+                <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showDownloads ? "rotate-180" : ""}`} />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={toggleFullscreen}
+                className="text-white"
+                data-testid="button-fullscreen"
+              >
+                {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+              </Button>
+            </div>
           </div>
 
-          <div ref={playerSectionRef}>
-            <div className="flex items-center justify-between gap-3 mb-3 px-1 flex-wrap">
-              <div className="flex items-center gap-2 flex-wrap">
-                {type === "tv" && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={goPrev}
-                      disabled={isFirstEpisode}
-                      className="border-green-500/30 text-green-400 font-mono gap-1"
-                      data-testid="button-prev-episode"
-                    >
-                      <SkipBack className="w-4 h-4" />
-                      Prev
-                    </Button>
-                    <div className="text-center" data-testid="text-current-playing">
-                      <span className="text-white font-display font-bold text-base">
-                        S{season} E{episode}
-                      </span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={goNext}
-                      disabled={isLastEpisode}
-                      className="border-green-500/30 text-green-400 font-mono gap-1"
-                      data-testid="button-next-episode"
-                    >
-                      Next
-                      <SkipForward className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
+          <GlassPanel className="mb-4 p-0 overflow-hidden">
+            {!playerUrl ? (
+              <div className="w-full aspect-video bg-black flex items-center justify-center">
+                <div className="text-center">
+                  <Search className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
+                  <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
+                    No streaming source found for this title
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowDownloads(!showDownloads)}
-                  className="text-green-400 font-mono text-xs"
-                  data-testid="button-toggle-downloads"
-                >
-                  <Download className="w-4 h-4 mr-1" />
-                  Downloads
-                  <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${showDownloads ? "rotate-180" : ""}`} />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={toggleFullscreen}
-                  className="text-white"
-                  data-testid="button-fullscreen"
-                >
-                  {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-                </Button>
+            ) : (
+              <div ref={playerContainerRef} className="relative w-full aspect-video bg-black">
+                {iframeLoading && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/90 pointer-events-none">
+                    <div className="relative mb-3">
+                      <div className="w-10 h-10 rounded-full border-2 border-green-500/20 border-t-green-500 animate-spin" />
+                      <Play className="absolute inset-0 m-auto w-4 h-4 text-green-500" />
+                    </div>
+                    <p className="text-xs font-mono text-gray-500">Connecting...</p>
+                  </div>
+                )}
+                <iframe
+                  key={`player-${season}-${episode}-${renderCount}`}
+                  src={playerUrl}
+                  className="absolute inset-0 w-full h-full"
+                  allowFullScreen
+                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+                  referrerPolicy="no-referrer"
+                  loading="eager"
+                  onLoad={() => setIframeLoading(false)}
+                  data-testid="iframe-player"
+                />
+              </div>
+            )}
+          </GlassPanel>
+        </div>
+
+        {showDownloads && (
+          <GlassPanel className="mb-4">
+            <h2 className="text-lg font-display font-bold text-white flex items-center gap-2 mb-4" data-testid="text-download-heading">
+              <Download className="w-5 h-5 text-green-400" />
+              Downloads
+            </h2>
+            <DownloadSection title={title} />
+          </GlassPanel>
+        )}
+
+        <div className="flex flex-col lg:flex-row gap-6 mt-4">
+          {posterUrl && (
+            <div className="flex-shrink-0 hidden lg:block">
+              <GlassCard hover={false} className="overflow-hidden w-[200px]">
+                <img src={posterUrl} alt={title} className="w-full rounded-[1rem]" data-testid="img-poster" />
+              </GlassCard>
+            </div>
+          )}
+
+          <div className="flex-1 min-w-0">
+            {detailLoading && id.startsWith("tt") ? (
+              <div className="flex items-center gap-3 py-4">
+                <Loader2 className="w-4 h-4 text-green-500 animate-spin" />
+                <span className="text-xs font-mono text-gray-400">Loading details...</span>
+              </div>
+            ) : bwmDetail ? (
+              <>
+                <div className="flex flex-wrap items-center gap-3 mb-3">
+                  {rating > 0 && (
+                    <span className="flex items-center gap-1 text-sm font-mono text-green-400" data-testid="text-rating">
+                      <Star className="w-4 h-4 fill-green-400" />
+                      {rating.toFixed(1)}
+                    </span>
+                  )}
+                  {year && (
+                    <span className="flex items-center gap-1 text-sm font-mono text-gray-400" data-testid="text-year">
+                      <Calendar className="w-4 h-4" />
+                      {year}
+                    </span>
+                  )}
+                  {duration > 0 && (
+                    <span className="flex items-center gap-1 text-sm font-mono text-gray-400" data-testid="text-runtime">
+                      <Clock className="w-4 h-4" />
+                      {duration} min
+                    </span>
+                  )}
+                  {seasonCount > 0 && (
+                    <span className="text-xs font-mono text-gray-500" data-testid="text-seasons">
+                      {seasonCount}S / {totalEpisodes}E
+                    </span>
+                  )}
+                </div>
+
+                {genres.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {genres.map((g) => (
+                      <Badge key={g} variant="outline" className="text-green-300 border-green-500/15 bg-green-500/10 font-mono" data-testid={`badge-genre-${g}`}>
+                        {g}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                {description && (
+                  <p className="text-sm text-gray-300 leading-relaxed max-w-2xl" data-testid="text-watch-overview">
+                    {description}
+                  </p>
+                )}
+              </>
+            ) : null}
+          </div>
+        </div>
+
+        {type === "tv" && seasonCount > 0 && (
+          <GlassPanel className="mt-6 mb-8">
+            <h3 className="text-lg font-display font-bold text-white mb-4 flex items-center gap-2" data-testid="text-season-selector">
+              <Tv2 className="w-5 h-5 text-green-400" />
+              Seasons & Episodes
+            </h3>
+
+            <div className="mb-4">
+              <div className="flex gap-2 flex-wrap">
+                {seasons.map((s) => (
+                  <Button
+                    key={s.seasonNumber}
+                    size="sm"
+                    variant={season === s.seasonNumber ? "default" : "ghost"}
+                    onClick={() => goTo(s.seasonNumber, 1)}
+                    className={`font-mono text-xs ${season === s.seasonNumber ? "bg-green-600 text-white" : "text-gray-400"}`}
+                    data-testid={`button-season-${s.seasonNumber}`}
+                  >
+                    Season {s.seasonNumber} ({s.episodeCount} ep)
+                  </Button>
+                ))}
               </div>
             </div>
 
-            <GlassPanel className="mb-4 p-0 overflow-hidden">
-              {!playerUrl ? (
-                <div className="w-full aspect-video bg-black flex items-center justify-center">
-                  <div className="text-center">
-                    <Search className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
-                    <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
-                      No streaming source found for this title
-                    </p>
-                  </div>
+            {episodeCount > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <span className="text-xs font-mono text-gray-400">
+                    {episodeCount} Episodes
+                  </span>
+                  <span className="text-xs font-mono text-green-400">
+                    Playing: S{season}E{episode}
+                  </span>
                 </div>
-              ) : (
-                <div ref={playerContainerRef} className="relative w-full aspect-video bg-black">
-                  {iframeLoading && (
-                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black">
-                      <div className="relative mb-4">
-                        <div className="w-12 h-12 rounded-full border-2 border-green-500/20 border-t-green-500 animate-spin" />
-                        <Play className="absolute inset-0 m-auto w-5 h-5 text-green-500" />
-                      </div>
-                      <p className="text-sm font-mono text-gray-400">Loading player...</p>
-                      <p className="text-xs font-mono text-gray-600 mt-1">Connecting to stream</p>
-                    </div>
-                  )}
-                  <iframe
-                    key={`player-${season}-${episode}-${renderCount}-${activeSource}`}
-                    src={playerUrl}
-                    className="absolute inset-0 w-full h-full"
-                    allowFullScreen
-                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                    referrerPolicy="no-referrer"
-                    onLoad={() => setIframeLoading(false)}
-                    data-testid="iframe-player"
-                  />
-                </div>
-              )}
-            </GlassPanel>
-          </div>
-
-          {showDownloads && (
-            <GlassPanel className="mb-8">
-              <h2 className="text-lg font-display font-bold text-white flex items-center gap-2 mb-4" data-testid="text-download-heading">
-                <Download className="w-5 h-5 text-green-400" />
-                Downloads
-              </h2>
-              <DownloadSection title={title} />
-            </GlassPanel>
-          )}
-
-          {type === "tv" && seasonCount > 0 && (
-            <GlassPanel className="mb-8">
-              <h3 className="text-lg font-display font-bold text-white mb-4 flex items-center gap-2" data-testid="text-season-selector">
-                <Tv2 className="w-5 h-5 text-green-400" />
-                Seasons & Episodes
-              </h3>
-
-              <div className="mb-4">
-                <div className="flex gap-2 flex-wrap">
-                  {seasons.map((s) => (
-                    <Button
-                      key={s.seasonNumber}
-                      size="sm"
-                      variant={season === s.seasonNumber ? "default" : "ghost"}
-                      onClick={() => goTo(s.seasonNumber, 1)}
-                      className={`font-mono text-xs ${season === s.seasonNumber ? "bg-green-600 text-white" : "text-gray-400"}`}
-                      data-testid={`button-season-${s.seasonNumber}`}
-                    >
-                      Season {s.seasonNumber} ({s.episodeCount} ep)
-                    </Button>
-                  ))}
+                <div className="grid gap-2 max-h-[500px] overflow-y-auto pr-1">
+                  {Array.from({ length: episodeCount }, (_, i) => i + 1).map((epNum) => {
+                    const isActive = episode === epNum;
+                    return (
+                      <button
+                        key={`s${season}-e${epNum}`}
+                        onClick={() => goTo(season, epNum)}
+                        className={`flex items-center gap-3 p-3 rounded-md text-left transition-all ${
+                          isActive
+                            ? "bg-green-500/20 border border-green-500/40 shadow-lg shadow-green-500/10"
+                            : "bg-black/30 border border-green-500/5 hover:border-green-500/20 hover:bg-green-500/5"
+                        }`}
+                        data-testid={`button-episode-${epNum}`}
+                      >
+                        <div className={`flex-shrink-0 w-10 h-10 rounded-md flex items-center justify-center font-mono text-sm font-bold ${
+                          isActive
+                            ? "bg-green-500 text-black"
+                            : "bg-green-500/10 text-green-400"
+                        }`}>
+                          {epNum}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-mono font-medium ${
+                            isActive ? "text-green-300" : "text-white"
+                          }`}>
+                            Episode {epNum}
+                          </p>
+                        </div>
+                        {isActive && (
+                          <div className="flex-shrink-0 flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                            <span className="text-[10px] font-mono text-green-400">PLAYING</span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
-              {episodeCount > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2 gap-2">
-                    <span className="text-xs font-mono text-gray-400">
-                      {episodeCount} Episodes
-                    </span>
-                    <span className="text-xs font-mono text-green-400">
-                      Playing: S{season}E{episode}
-                    </span>
-                  </div>
-                  <div className="grid gap-2 max-h-[500px] overflow-y-auto pr-1">
-                    {Array.from({ length: episodeCount }, (_, i) => i + 1).map((epNum) => {
-                      const isActive = episode === epNum;
-                      return (
-                        <button
-                          key={`s${season}-e${epNum}`}
-                          onClick={() => goTo(season, epNum)}
-                          className={`flex items-center gap-3 p-3 rounded-md text-left transition-all ${
-                            isActive
-                              ? "bg-green-500/20 border border-green-500/40 shadow-lg shadow-green-500/10"
-                              : "bg-black/30 border border-green-500/5 hover:border-green-500/20 hover:bg-green-500/5"
-                          }`}
-                          data-testid={`button-episode-${epNum}`}
-                        >
-                          <div className={`flex-shrink-0 w-10 h-10 rounded-md flex items-center justify-center font-mono text-sm font-bold ${
-                            isActive
-                              ? "bg-green-500 text-black"
-                              : "bg-green-500/10 text-green-400"
-                          }`}>
-                            {epNum}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm font-mono font-medium ${
-                              isActive ? "text-green-300" : "text-white"
-                            }`}>
-                              Episode {epNum}
-                            </p>
-                          </div>
-                          {isActive && (
-                            <div className="flex-shrink-0 flex items-center gap-1">
-                              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                              <span className="text-[10px] font-mono text-green-400">PLAYING</span>
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </GlassPanel>
-          )}
-        </div>
+            )}
+          </GlassPanel>
+        )}
       </div>
     </div>
   );

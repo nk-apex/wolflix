@@ -4,6 +4,9 @@ import { createServer, type Server } from "http";
 const IMDB_API_BASE = "https://api.imdbapi.dev";
 const DOWNLOAD_API_BASE = "https://arslan-apis.vercel.app/movie";
 
+const titleCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL = 10 * 60 * 1000;
+
 async function searchTitles(query: string): Promise<any> {
   const url = `${IMDB_API_BASE}/search/titles?query=${encodeURIComponent(query)}`;
   const res = await fetch(url, {
@@ -160,48 +163,64 @@ export async function registerRoutes(
   app.get("/api/silentwolf/title/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const url = `${IMDB_API_BASE}/titles/${id}`;
-      const r = await fetch(url, {
-        headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!r.ok) throw new Error(`API error: ${r.status}`);
-      const data = await r.json();
+
+      const cached = titleCache.get(id);
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        return res.json(cached.data);
+      }
+
+      const titleUrl = `${IMDB_API_BASE}/titles/${id}`;
+      const seasonsUrl = `${IMDB_API_BASE}/titles/${id}/seasons`;
+
+      const [titleRes, seasonsRes] = await Promise.all([
+        fetch(titleUrl, {
+          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(10000),
+        }),
+        fetch(seasonsUrl, {
+          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(10000),
+        }).catch(() => null),
+      ]);
+
+      if (!titleRes.ok) throw new Error(`API error: ${titleRes.status}`);
+      const data = await titleRes.json();
 
       let seasons: { seasonNumber: number; episodeCount: number }[] = [];
       let totalSeasons = 0;
       let totalEpisodes = 0;
 
-      if (data.type === "tvSeries" || data.type === "tvMiniSeries") {
+      if (seasonsRes && seasonsRes.ok && (data.type === "tvSeries" || data.type === "tvMiniSeries")) {
         try {
-          const seasonsUrl = `${IMDB_API_BASE}/titles/${id}/seasons`;
-          const sRes = await fetch(seasonsUrl, {
-            headers: { "Content-Type": "application/json" },
-            signal: AbortSignal.timeout(15000),
-          });
-          if (sRes.ok) {
-            const sData = await sRes.json();
-            if (sData.seasons && Array.isArray(sData.seasons)) {
-              seasons = sData.seasons.map((s: any) => ({
-                seasonNumber: parseInt(s.season, 10),
-                episodeCount: s.episodeCount || 0,
-              }));
-              totalSeasons = seasons.length;
-              totalEpisodes = seasons.reduce((sum, s) => sum + s.episodeCount, 0);
-            }
+          const sData = await seasonsRes.json();
+          if (sData.seasons && Array.isArray(sData.seasons)) {
+            seasons = sData.seasons.map((s: any) => ({
+              seasonNumber: parseInt(s.season, 10),
+              episodeCount: s.episodeCount || 0,
+            }));
+            totalSeasons = seasons.length;
+            totalEpisodes = seasons.reduce((sum, s) => sum + s.episodeCount, 0);
           }
         } catch {}
       }
 
       const runtime = data.runtimeSeconds ? Math.round(data.runtimeSeconds / 60) : 0;
 
-      res.json({
+      const result = {
         ...data,
         runtime,
         totalSeasons,
         totalEpisodes,
         seasons,
-      });
+      };
+
+      titleCache.set(id, { data: result, timestamp: Date.now() });
+      if (titleCache.size > 200) {
+        const oldest = titleCache.keys().next().value;
+        if (oldest) titleCache.delete(oldest);
+      }
+
+      res.json(result);
     } catch (e: any) {
       res.status(502).json({ error: "Title details temporarily unavailable.", detail: e.message });
     }
