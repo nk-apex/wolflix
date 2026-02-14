@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Play, Download, ArrowLeft, Star, Calendar, Clock, Search, Maximize, Minimize, ChevronDown, SkipBack, SkipForward, Tv2, Loader2, ExternalLink } from "lucide-react";
+import { Download, ArrowLeft, Star, Calendar, Clock, Search, Maximize, Minimize, ChevronDown, SkipBack, SkipForward, Tv2, Loader2, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
@@ -25,7 +25,6 @@ export default function Watch() {
   const [season, setSeason] = useState(1);
   const [episode, setEpisode] = useState(1);
   const [renderCount, setRenderCount] = useState(0);
-  const [iframeLoading, setIframeLoading] = useState(true);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerSectionRef = useRef<HTMLDivElement>(null);
   const prevIdRef = useRef(id);
@@ -37,7 +36,6 @@ export default function Watch() {
       setEpisode(1);
       setRenderCount(0);
       setShowDownloads(false);
-      setIframeLoading(true);
     }
   }, [id]);
 
@@ -45,13 +43,6 @@ export default function Watch() {
     if (!id) return "";
     return EMBED_SOURCES[0].buildUrl(id, type, season, episode);
   }, [id, type, season, episode]);
-
-  useEffect(() => {
-    if (!playerUrl) return;
-    setIframeLoading(true);
-    const timer = setTimeout(() => setIframeLoading(false), 4000);
-    return () => clearTimeout(timer);
-  }, [playerUrl, renderCount]);
 
   const scrollToPlayer = useCallback(() => {
     setTimeout(() => {
@@ -109,7 +100,6 @@ export default function Watch() {
     setSeason(newSeason);
     setEpisode(newEpisode);
     setRenderCount(c => c + 1);
-    setIframeLoading(true);
     scrollToPlayer();
   }, [scrollToPlayer]);
 
@@ -238,15 +228,6 @@ export default function Watch() {
               </div>
             ) : (
               <div ref={playerContainerRef} className="relative w-full aspect-video bg-black">
-                {iframeLoading && (
-                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black/90 pointer-events-none">
-                    <div className="relative mb-3">
-                      <div className="w-10 h-10 rounded-full border-2 border-green-500/20 border-t-green-500 animate-spin" />
-                      <Play className="absolute inset-0 m-auto w-4 h-4 text-green-500" />
-                    </div>
-                    <p className="text-xs font-mono text-gray-500">Connecting...</p>
-                  </div>
-                )}
                 <iframe
                   key={`player-${season}-${episode}-${renderCount}`}
                   src={playerUrl}
@@ -255,7 +236,6 @@ export default function Watch() {
                   allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
                   referrerPolicy="no-referrer"
                   loading="eager"
-                  onLoad={() => setIframeLoading(false)}
                   data-testid="iframe-player"
                 />
               </div>
