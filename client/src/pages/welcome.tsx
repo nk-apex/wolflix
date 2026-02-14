@@ -28,7 +28,7 @@ export default function Welcome() {
   const [heroIndex, setHeroIndex] = useState(0);
 
   const { data: trending, isLoading } = useQuery<BWMResponse>({
-    queryKey: ["/api/bwm/category", "trending"],
+    queryKey: ["/api/silentwolf/category", "trending"],
   });
 
   const allItems = trending?.titles || [];

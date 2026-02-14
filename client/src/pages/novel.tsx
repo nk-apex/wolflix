@@ -13,7 +13,7 @@ const categories = [
 export default function Novel() {
   const queries = categories.map((cat) => {
     return useQuery<BWMResponse>({
-      queryKey: ["/api/bwm/category", cat.key],
+      queryKey: ["/api/silentwolf/category", cat.key],
     });
   });
 

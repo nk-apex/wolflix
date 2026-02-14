@@ -21,10 +21,10 @@ export default function SearchPage() {
   }, [location]);
 
   const { data: bwmData, isLoading } = useQuery<BWMResponse>({
-    queryKey: ["/api/bwm/search", searchTerm],
+    queryKey: ["/api/silentwolf/search", searchTerm],
     enabled: searchTerm.length > 1,
     queryFn: async () => {
-      const res = await fetch(`/api/bwm/search?q=${encodeURIComponent(searchTerm)}`);
+      const res = await fetch(`/api/silentwolf/search?q=${encodeURIComponent(searchTerm)}`);
       if (!res.ok) throw new Error("Search failed");
       return res.json();
     },
@@ -144,7 +144,7 @@ export default function SearchPage() {
             <Tv className="w-8 h-8 text-green-500/20" />
           </div>
           <p className="text-gray-500 font-mono text-sm">Search for movies, TV shows, and more</p>
-          <p className="text-gray-600 font-mono text-xs mt-1">Powered by BWM / IMDB database</p>
+          <p className="text-gray-600 font-mono text-xs mt-1">Powered by SilentWolf</p>
         </div>
       )}
     </div>

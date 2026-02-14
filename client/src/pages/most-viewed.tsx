@@ -10,16 +10,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function MostViewed() {
   const [, navigate] = useLocation();
   const { data: top10, isLoading: l1 } = useQuery<BWMResponse>({
-    queryKey: ["/api/bwm/category", "most-trending"],
+    queryKey: ["/api/silentwolf/category", "most-trending"],
   });
   const { data: popular, isLoading: l2 } = useQuery<BWMResponse>({
-    queryKey: ["/api/bwm/category", "most-popular"],
+    queryKey: ["/api/silentwolf/category", "most-popular"],
   });
   const { data: topRated, isLoading: l3 } = useQuery<BWMResponse>({
-    queryKey: ["/api/bwm/category", "most-top-rated"],
+    queryKey: ["/api/silentwolf/category", "most-top-rated"],
   });
   const { data: tvPopular, isLoading: l4 } = useQuery<BWMResponse>({
-    queryKey: ["/api/bwm/category", "most-tv-popular"],
+    queryKey: ["/api/silentwolf/category", "most-tv-popular"],
   });
 
   const topItems = top10?.titles?.slice(0, 10) || [];

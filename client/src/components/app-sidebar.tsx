@@ -1,7 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { 
   Film, Tv, Theater, Palette, BookOpen, 
-  Flame, Smartphone, Search, Settings, User, Clapperboard
+  Flame, Smartphone, Search, Settings, User, Clapperboard,
+  Music2, Trophy
 } from "lucide-react";
 import wolflixLogo from "@assets/wolflix-logo.png";
 import {
@@ -24,6 +25,8 @@ const mainMenu = [
   { title: "TV Shows", url: "/tv-shows", icon: Tv },
   { title: "Series", url: "/series", icon: Theater },
   { title: "Animation", url: "/animation", icon: Palette },
+  { title: "Music", url: "/music", icon: Music2 },
+  { title: "Sport", url: "/sport", icon: Trophy },
   { title: "Novel", url: "/novel", icon: BookOpen },
   { title: "Most Viewed", url: "/most-viewed", icon: Flame },
   { title: "Application", url: "/application", icon: Smartphone },

@@ -1,22 +1,25 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 
-const BWM_BASE = "https://api.imdbapi.dev";
-const ARSLAN_BASE = "https://arslan-apis.vercel.app/movie";
+const IMDB_API_BASE = "https://api.imdbapi.dev";
+const DOWNLOAD_API_BASE = "https://arslan-apis.vercel.app/movie";
 
-async function bwmSearch(query: string): Promise<any> {
-  const url = `${BWM_BASE}/search/titles?query=${encodeURIComponent(query)}`;
+async function searchTitles(query: string): Promise<any> {
+  const url = `${IMDB_API_BASE}/search/titles?query=${encodeURIComponent(query)}`;
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(15000),
   });
-  if (!res.ok) throw new Error(`BWM API error: ${res.status}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
-async function arslanFetch(path: string): Promise<any> {
-  const url = `${ARSLAN_BASE}${path}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Arslan API error: ${res.status}`);
+async function fetchDownloadApi(path: string): Promise<any> {
+  const url = `${DOWNLOAD_API_BASE}${path}`;
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
@@ -25,18 +28,18 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  app.get("/api/bwm/search", async (req, res) => {
+  app.get("/api/silentwolf/search", async (req, res) => {
     try {
       const q = req.query.q as string;
       if (!q) return res.status(400).json({ error: "q query required" });
-      const data = await bwmSearch(q);
+      const data = await searchTitles(q);
       res.json(data);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(502).json({ error: "Search temporarily unavailable. Please try again.", detail: e.message });
     }
   });
 
-  app.get("/api/bwm/category/:category", async (req, res) => {
+  app.get("/api/silentwolf/category/:category", async (req, res) => {
     try {
       const { category } = req.params;
       const keywordMap: Record<string, string[]> = {
@@ -68,6 +71,16 @@ export async function registerRoutes(
         "most-popular": ["popular movie 2024", "popular film"],
         "most-top-rated": ["top rated movie", "best movie all time"],
         "most-tv-popular": ["popular tv show", "best tv series"],
+        "music-concert": ["concert film", "music concert movie"],
+        "music-documentary": ["music documentary", "musician biography"],
+        "music-biopic": ["music biopic", "singer movie biography"],
+        "music-musical": ["musical movie", "musical film"],
+        "sport-football": ["football movie", "soccer film"],
+        "sport-boxing": ["boxing movie", "boxing film"],
+        "sport-racing": ["racing movie", "motorsport film"],
+        "sport-documentary": ["sports documentary", "athlete documentary"],
+        "sport-basketball": ["basketball movie", "basketball film"],
+        "sport-general": ["sports movie", "athletics film"],
       };
 
       const keywords = keywordMap[category];
@@ -76,104 +89,112 @@ export async function registerRoutes(
       const allResults: any[] = [];
       const seenIds = new Set<string>();
 
-      for (const kw of keywords) {
+      const searchPromises = keywords.map(async (kw) => {
         try {
-          const data = await bwmSearch(kw);
-          if (data?.titles) {
-            for (const t of data.titles) {
-              if (!seenIds.has(t.id) && t.primaryImage?.url) {
-                seenIds.add(t.id);
-                allResults.push(t);
-              }
+          const data = await searchTitles(kw);
+          return data?.titles || [];
+        } catch {
+          return [];
+        }
+      });
+
+      const results = await Promise.allSettled(searchPromises);
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          for (const t of result.value) {
+            if (!seenIds.has(t.id) && t.primaryImage?.url) {
+              seenIds.add(t.id);
+              allResults.push(t);
             }
           }
-        } catch {}
+        }
       }
 
       res.json({ titles: allResults });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(502).json({ error: "Content temporarily unavailable. Please try again.", titles: [] });
     }
   });
 
-  app.get("/api/bwm/title/:id", async (req, res) => {
+  app.get("/api/silentwolf/title/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const url = `${BWM_BASE}/v2/title/${id}`;
+      const url = `${IMDB_API_BASE}/v2/title/${id}`;
       const r = await fetch(url, {
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(15000),
       });
-      if (!r.ok) throw new Error(`BWM API error: ${r.status}`);
+      if (!r.ok) throw new Error(`API error: ${r.status}`);
       const data = await r.json();
       res.json(data);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(502).json({ error: "Title details temporarily unavailable.", detail: e.message });
     }
   });
 
-  app.get("/api/arslan/search", async (req, res) => {
+  app.get("/api/silentwolf/download/search", async (req, res) => {
     try {
       const text = req.query.text as string;
       if (!text) return res.status(400).json({ error: "text query required" });
-      const data = await arslanFetch(`/pirate/search?text=${encodeURIComponent(text)}`);
+      const data = await fetchDownloadApi(`/pirate/search?text=${encodeURIComponent(text)}`);
       res.json(data);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(502).json({ error: "Download search unavailable.", results: [] });
     }
   });
 
-  app.get("/api/arslan/movie", async (req, res) => {
+  app.get("/api/silentwolf/download/movie", async (req, res) => {
     try {
       const url = req.query.url as string;
       if (!url) return res.status(400).json({ error: "url query required" });
-      const data = await arslanFetch(`/pirate/movie?url=${encodeURIComponent(url)}`);
+      const data = await fetchDownloadApi(`/pirate/movie?url=${encodeURIComponent(url)}`);
       res.json(data);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(502).json({ error: "Download details unavailable.", links: [] });
     }
   });
 
-  app.get("/api/arslan/sinhalasub/search", async (req, res) => {
+  app.get("/api/silentwolf/sub/search", async (req, res) => {
     try {
       const text = req.query.text as string;
       if (!text) return res.status(400).json({ error: "text query required" });
-      const data = await arslanFetch(`/sinhalasub/search?text=${encodeURIComponent(text)}`);
+      const data = await fetchDownloadApi(`/sinhalasub/search?text=${encodeURIComponent(text)}`);
       res.json(data);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(502).json({ error: "Subtitle search unavailable.", results: [] });
     }
   });
 
-  app.get("/api/arslan/sinhalasub/movie", async (req, res) => {
+  app.get("/api/silentwolf/sub/movie", async (req, res) => {
     try {
       const url = req.query.url as string;
       if (!url) return res.status(400).json({ error: "url query required" });
-      const data = await arslanFetch(`/sinhalasub/movie?url=${encodeURIComponent(url)}`);
+      const data = await fetchDownloadApi(`/sinhalasub/movie?url=${encodeURIComponent(url)}`);
       res.json(data);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(502).json({ error: "Subtitle details unavailable." });
     }
   });
 
-  app.get("/api/arslan/sinhalasub/tvshow", async (req, res) => {
+  app.get("/api/silentwolf/sub/tvshow", async (req, res) => {
     try {
       const url = req.query.url as string;
       if (!url) return res.status(400).json({ error: "url query required" });
-      const data = await arslanFetch(`/sinhalasub/tvshow?url=${encodeURIComponent(url)}`);
+      const data = await fetchDownloadApi(`/sinhalasub/tvshow?url=${encodeURIComponent(url)}`);
       res.json(data);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(502).json({ error: "TV show details unavailable." });
     }
   });
 
-  app.get("/api/arslan/sinhalasub/episode", async (req, res) => {
+  app.get("/api/silentwolf/sub/episode", async (req, res) => {
     try {
       const url = req.query.url as string;
       if (!url) return res.status(400).json({ error: "url query required" });
-      const data = await arslanFetch(`/sinhalasub/episode?url=${encodeURIComponent(url)}`);
+      const data = await fetchDownloadApi(`/sinhalasub/episode?url=${encodeURIComponent(url)}`);
       res.json(data);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(502).json({ error: "Episode details unavailable." });
     }
   });
 

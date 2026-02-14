@@ -16,6 +16,8 @@ import Animation from "@/pages/animation";
 import Novel from "@/pages/novel";
 import MostViewed from "@/pages/most-viewed";
 import Application from "@/pages/application";
+import MusicPage from "@/pages/music";
+import SportPage from "@/pages/sport";
 import SearchPage from "@/pages/search";
 import SettingsPage from "@/pages/settings";
 import Profile from "@/pages/profile";
@@ -32,6 +34,8 @@ function Router() {
       <Route path="/novel" component={Novel} />
       <Route path="/most-viewed" component={MostViewed} />
       <Route path="/application" component={Application} />
+      <Route path="/music" component={MusicPage} />
+      <Route path="/sport" component={SportPage} />
       <Route path="/search" component={SearchPage} />
       <Route path="/settings" component={SettingsPage} />
       <Route path="/profile" component={Profile} />
@@ -87,7 +91,7 @@ function App() {
               <header className="flex items-center gap-3 p-2 border-b border-green-500/10 bg-black/50 backdrop-blur-sm sticky top-0 z-50">
                 <SidebarTrigger data-testid="button-sidebar-toggle" className="text-gray-400 hover:text-green-400 transition-colors" />
                 <GlobalSearchBar />
-                <span className="text-xs font-mono text-gray-600 hidden sm:block flex-shrink-0">WOLFLIX v1.0</span>
+                <span className="text-xs font-mono text-gray-600 hidden sm:block flex-shrink-0">WOLFLIX v2.0</span>
               </header>
               <main className="flex-1 overflow-y-auto bg-black">
                 <Router />

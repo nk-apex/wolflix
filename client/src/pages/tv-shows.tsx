@@ -15,7 +15,7 @@ const categories = [
 export default function TVShows() {
   const queries = categories.map((cat) => {
     return useQuery<BWMResponse>({
-      queryKey: ["/api/bwm/category", cat.key],
+      queryKey: ["/api/silentwolf/category", cat.key],
     });
   });
 
