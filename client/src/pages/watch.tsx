@@ -151,11 +151,11 @@ export default function Watch() {
   if (detailLoading && id.startsWith("tt")) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-black">
-        <div className="relative mb-6">
-          <div className="absolute rounded-full border-[3px] border-transparent border-t-green-500 animate-spin" style={{ width: "6rem", height: "6rem", top: "-0.5rem", left: "-0.5rem" }} />
-          <div className="absolute rounded-full border-[2px] border-transparent border-b-green-400/60 animate-spin" style={{ width: "7.5rem", height: "7.5rem", top: "-1.25rem", left: "-1.25rem", animationDirection: "reverse", animationDuration: "1.5s" }} />
-          <div className="absolute rounded-full border-[2px] border-transparent border-l-green-300/30 animate-spin" style={{ width: "9rem", height: "9rem", top: "-2rem", left: "-2rem", animationDuration: "2.5s" }} />
-          <img src={wolflixLogo} alt="WOLFLIX" className="w-20 h-20 rounded-2xl object-cover relative z-10" />
+        <div className="relative w-20 h-20 mb-8">
+          <div className="absolute inset-[-12px] rounded-full border-[3px] border-transparent border-t-green-500 animate-spin" />
+          <div className="absolute inset-[-24px] rounded-full border-[2px] border-transparent border-b-green-400/60 animate-spin" style={{ animationDirection: "reverse", animationDuration: "1.5s" }} />
+          <div className="absolute inset-[-36px] rounded-full border-[2px] border-transparent border-l-green-300/30 animate-spin" style={{ animationDuration: "2.5s" }} />
+          <img src={wolflixLogo} alt="WOLFLIX" className="w-20 h-20 rounded-full object-cover relative z-10" />
         </div>
         <p className="text-xl font-display font-bold text-white mb-1">
           WOLF<span className="text-green-400">LIX</span>
@@ -313,12 +313,12 @@ export default function Watch() {
               ) : (
                 <div ref={playerContainerRef} className="relative w-full aspect-video bg-black">
                   {!splashDone && (
-                    <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center bg-black transition-opacity duration-700 ${playerLoaded && splashDone ? "opacity-0 pointer-events-none" : "opacity-100"}`} data-testid="player-splash">
-                      <div className="relative mb-6">
-                        <div className="absolute inset-0 -m-4 rounded-full border-[3px] border-transparent border-t-green-500 animate-spin" style={{ width: "calc(100% + 2rem)", height: "calc(100% + 2rem)", top: "-1rem", left: "-1rem" }} />
-                        <div className="absolute inset-0 -m-7 rounded-full border-[2px] border-transparent border-b-green-400/60 animate-spin" style={{ width: "calc(100% + 3.5rem)", height: "calc(100% + 3.5rem)", top: "-1.75rem", left: "-1.75rem", animationDirection: "reverse", animationDuration: "1.5s" }} />
-                        <div className="absolute inset-0 -m-10 rounded-full border-[2px] border-transparent border-l-green-300/30 animate-spin" style={{ width: "calc(100% + 5rem)", height: "calc(100% + 5rem)", top: "-2.5rem", left: "-2.5rem", animationDuration: "2.5s" }} />
-                        <img src={wolflixLogo} alt="WOLFLIX" className="w-16 h-16 rounded-2xl object-cover relative z-10" />
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-black" data-testid="player-splash">
+                      <div className="relative w-16 h-16 mb-8">
+                        <div className="absolute inset-[-10px] rounded-full border-[3px] border-transparent border-t-green-500 animate-spin" />
+                        <div className="absolute inset-[-20px] rounded-full border-[2px] border-transparent border-b-green-400/60 animate-spin" style={{ animationDirection: "reverse", animationDuration: "1.5s" }} />
+                        <div className="absolute inset-[-30px] rounded-full border-[2px] border-transparent border-l-green-300/30 animate-spin" style={{ animationDuration: "2.5s" }} />
+                        <img src={wolflixLogo} alt="WOLFLIX" className="w-16 h-16 rounded-full object-cover relative z-10" />
                       </div>
                       <p className="text-lg font-display font-bold text-white mb-1">
                         WOLF<span className="text-green-400">LIX</span>
@@ -340,7 +340,7 @@ export default function Watch() {
                       if (splashTimerRef.current) clearTimeout(splashTimerRef.current);
                       splashTimerRef.current = setTimeout(() => {
                         setSplashDone(true);
-                      }, 15000);
+                      }, 18000);
                     }}
                     data-testid="iframe-player"
                   />
