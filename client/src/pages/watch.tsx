@@ -9,9 +9,6 @@ import { type BWMDetail, getRating, getPosterUrl } from "@/lib/tmdb";
 
 const EMBED_SOURCES = [
   { name: "Server 1", buildUrl: (id: string, type: string, s: number, e: number) => type === "tv" ? `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}` : `https://player.autoembed.cc/embed/movie/${id}` },
-  { name: "Server 2", buildUrl: (id: string, type: string, s: number, e: number) => type === "tv" ? `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}` : `https://vidsrc.cc/v2/embed/movie/${id}` },
-  { name: "Server 3", buildUrl: (id: string, type: string, s: number, e: number) => type === "tv" ? `https://vidsrc.xyz/embed/tv/${id}?season=${s}&episode=${e}` : `https://vidsrc.xyz/embed/movie/${id}` },
-  { name: "Server 4", buildUrl: (id: string, type: string, s: number, e: number) => type === "tv" ? `https://embed.su/embed/tv/${id}/${s}/${e}` : `https://embed.su/embed/movie/${id}` },
 ];
 
 export default function Watch() {
@@ -254,20 +251,6 @@ export default function Watch() {
                     </Button>
                   </>
                 )}
-                <div className="flex items-center gap-1 ml-2">
-                  {EMBED_SOURCES.map((src, i) => (
-                    <Button
-                      key={i}
-                      size="sm"
-                      variant={activeSource === i ? "default" : "ghost"}
-                      onClick={() => { setActiveSource(i); setRenderCount(c => c + 1); }}
-                      className={`font-mono text-xs ${activeSource === i ? "bg-green-600 text-white" : "text-gray-400"}`}
-                      data-testid={`button-source-${i}`}
-                    >
-                      {src.name}
-                    </Button>
-                  ))}
-                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button

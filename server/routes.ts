@@ -14,6 +14,23 @@ async function searchTitles(query: string): Promise<any> {
   return res.json();
 }
 
+async function listTitles(params: Record<string, string | string[]>): Promise<any> {
+  const url = new URL(`${IMDB_API_BASE}/titles`);
+  for (const [key, value] of Object.entries(params)) {
+    if (Array.isArray(value)) {
+      value.forEach(v => url.searchParams.append(key, v));
+    } else {
+      url.searchParams.set(key, value);
+    }
+  }
+  const res = await fetch(url.toString(), {
+    headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
 async function fetchDownloadApi(path: string): Promise<any> {
   const url = `${DOWNLOAD_API_BASE}${path}`;
   const res = await fetch(url, {
@@ -22,6 +39,60 @@ async function fetchDownloadApi(path: string): Promise<any> {
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
+
+interface CategoryConfig {
+  method: "search" | "list";
+  searches?: string[];
+  listParams?: Record<string, string | string[]>;
+}
+
+const categoryConfig: Record<string, CategoryConfig> = {
+  "trending": { method: "search", searches: ["2025 movie", "2024 movie", "new release"] },
+  "action": { method: "list", listParams: { genres: "Action", types: "MOVIE", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "10000" } },
+  "scifi": { method: "list", listParams: { genres: ["Sci-Fi", "Science Fiction"], types: "MOVIE", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+  "horror": { method: "list", listParams: { genres: "Horror", types: "MOVIE", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+  "drama": { method: "list", listParams: { genres: "Drama", types: "MOVIE", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "10000" } },
+  "comedy": { method: "list", listParams: { genres: "Comedy", types: "MOVIE", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "10000" } },
+
+  "tv-trending": { method: "search", searches: ["tv series 2025", "tv series 2024"] },
+  "tv-action": { method: "list", listParams: { genres: "Action", types: "TV_SERIES", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+  "tv-scifi": { method: "list", listParams: { genres: ["Sci-Fi", "Science Fiction"], types: "TV_SERIES", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+  "tv-animation": { method: "list", listParams: { genres: "Animation", types: "TV_SERIES", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+  "tv-drama": { method: "list", listParams: { genres: "Drama", types: "TV_SERIES", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "10000" } },
+  "tv-documentary": { method: "list", listParams: { genres: "Documentary", types: "TV_SERIES", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+
+  "series-trending": { method: "search", searches: ["popular tv series", "best series"] },
+  "series-top": { method: "list", listParams: { types: "TV_SERIES", sortBy: "SORT_BY_USER_RATING", sortOrder: "DESC", minVoteCount: "50000" } },
+  "series-popular": { method: "list", listParams: { types: "TV_SERIES", sortBy: "SORT_BY_USER_RATING_COUNT", sortOrder: "DESC", minVoteCount: "100000" } },
+  "series-new": { method: "list", listParams: { types: "TV_SERIES", sortBy: "SORT_BY_RELEASE_DATE", sortOrder: "DESC", minVoteCount: "1000", startYear: "2024" } },
+
+  "animation-movies": { method: "list", listParams: { genres: "Animation", types: "MOVIE", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "10000" } },
+  "animation-anime": { method: "search", searches: ["anime", "anime series"] },
+  "animation-tv": { method: "list", listParams: { genres: "Animation", types: "TV_SERIES", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+  "animation-family": { method: "list", listParams: { genres: ["Animation", "Family"], types: "MOVIE", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+
+  "music-documentary": { method: "list", listParams: { genres: ["Music", "Documentary"], sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "1000" } },
+  "music-biopic": { method: "list", listParams: { genres: ["Music", "Biography"], sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "1000" } },
+  "music-concert": { method: "list", listParams: { genres: "Music", types: "TV_SPECIAL", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "500" } },
+  "music-musical": { method: "list", listParams: { genres: "Musical", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+
+  "sport-general": { method: "list", listParams: { genres: "Sport", types: "MOVIE", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "5000" } },
+  "sport-boxing": { method: "search", searches: ["boxing movie", "boxing film"] },
+  "sport-racing": { method: "search", searches: ["racing movie", "motorsport film"] },
+  "sport-football": { method: "search", searches: ["football movie", "soccer film"] },
+  "sport-basketball": { method: "search", searches: ["basketball movie", "basketball film"] },
+  "sport-documentary": { method: "list", listParams: { genres: ["Sport", "Documentary"], sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "1000" } },
+
+  "novel-adaptations": { method: "search", searches: ["book adaptation movie", "novel movie"] },
+  "novel-classics": { method: "search", searches: ["classic literature film", "classic movie"] },
+  "novel-fantasy": { method: "list", listParams: { genres: "Fantasy", types: "MOVIE", sortBy: "SORT_BY_POPULARITY", sortOrder: "DESC", minVoteCount: "10000" } },
+  "novel-series": { method: "search", searches: ["book series tv", "novel tv adaptation"] },
+
+  "most-trending": { method: "search", searches: ["blockbuster movie", "box office hit"] },
+  "most-popular": { method: "list", listParams: { types: "MOVIE", sortBy: "SORT_BY_USER_RATING_COUNT", sortOrder: "DESC", minVoteCount: "500000" } },
+  "most-top-rated": { method: "list", listParams: { types: "MOVIE", sortBy: "SORT_BY_USER_RATING", sortOrder: "DESC", minVoteCount: "100000" } },
+  "most-tv-popular": { method: "list", listParams: { types: "TV_SERIES", sortBy: "SORT_BY_USER_RATING_COUNT", sortOrder: "DESC", minVoteCount: "100000" } },
+};
 
 export async function registerRoutes(
   httpServer: Server,
@@ -42,69 +113,39 @@ export async function registerRoutes(
   app.get("/api/silentwolf/category/:category", async (req, res) => {
     try {
       const { category } = req.params;
-      const keywordMap: Record<string, string[]> = {
-        "trending": ["2025 movie", "2024 movie", "new release"],
-        "action": ["action thriller", "action adventure movie"],
-        "scifi": ["science fiction movie", "sci fi"],
-        "horror": ["horror movie 2024", "horror thriller"],
-        "drama": ["drama movie", "drama film"],
-        "comedy": ["comedy movie", "comedy film"],
-        "tv-trending": ["tv series 2025", "tv series 2024"],
-        "tv-action": ["action tv series", "action adventure series"],
-        "tv-scifi": ["sci fi tv series", "science fiction series"],
-        "tv-animation": ["animated tv series", "animation series"],
-        "tv-drama": ["drama tv series", "drama series"],
-        "tv-documentary": ["documentary series", "documentary"],
-        "series-trending": ["popular tv series", "best series"],
-        "series-top": ["top rated series", "best tv show"],
-        "series-popular": ["popular show", "hit tv series"],
-        "series-new": ["new tv series 2025", "new series 2024"],
-        "animation-movies": ["animated movie", "animation film"],
-        "animation-anime": ["anime", "anime series"],
-        "animation-tv": ["animated tv show", "cartoon series"],
-        "animation-family": ["family animated movie", "family animation"],
-        "novel-adaptations": ["book adaptation movie", "novel movie"],
-        "novel-classics": ["classic literature film", "classic movie"],
-        "novel-fantasy": ["fantasy movie", "fantasy epic film"],
-        "novel-series": ["book series tv", "novel tv adaptation"],
-        "most-trending": ["blockbuster movie", "box office hit"],
-        "most-popular": ["popular movie 2024", "popular film"],
-        "most-top-rated": ["top rated movie", "best movie all time"],
-        "most-tv-popular": ["popular tv show", "best tv series"],
-        "music-concert": ["concert film", "music concert movie"],
-        "music-documentary": ["music documentary", "musician biography"],
-        "music-biopic": ["music biopic", "singer movie biography"],
-        "music-musical": ["musical movie", "musical film"],
-        "sport-football": ["football movie", "soccer film"],
-        "sport-boxing": ["boxing movie", "boxing film"],
-        "sport-racing": ["racing movie", "motorsport film"],
-        "sport-documentary": ["sports documentary", "athlete documentary"],
-        "sport-basketball": ["basketball movie", "basketball film"],
-        "sport-general": ["sports movie", "athletics film"],
-      };
-
-      const keywords = keywordMap[category];
-      if (!keywords) return res.status(400).json({ error: "Unknown category" });
+      const config = categoryConfig[category];
+      if (!config) return res.status(400).json({ error: "Unknown category" });
 
       const allResults: any[] = [];
       const seenIds = new Set<string>();
 
-      const searchPromises = keywords.map(async (kw) => {
-        try {
-          const data = await searchTitles(kw);
-          return data?.titles || [];
-        } catch {
-          return [];
+      if (config.method === "list" && config.listParams) {
+        const data = await listTitles(config.listParams);
+        const titles = data?.titles || [];
+        for (const t of titles) {
+          if (!seenIds.has(t.id) && t.primaryImage?.url) {
+            seenIds.add(t.id);
+            allResults.push(t);
+          }
         }
-      });
+      } else if (config.method === "search" && config.searches) {
+        const searchPromises = config.searches.map(async (kw) => {
+          try {
+            const data = await searchTitles(kw);
+            return data?.titles || [];
+          } catch {
+            return [];
+          }
+        });
 
-      const results = await Promise.allSettled(searchPromises);
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          for (const t of result.value) {
-            if (!seenIds.has(t.id) && t.primaryImage?.url) {
-              seenIds.add(t.id);
-              allResults.push(t);
+        const results = await Promise.allSettled(searchPromises);
+        for (const result of results) {
+          if (result.status === "fulfilled") {
+            for (const t of result.value) {
+              if (!seenIds.has(t.id) && t.primaryImage?.url) {
+                seenIds.add(t.id);
+                allResults.push(t);
+              }
             }
           }
         }
@@ -119,14 +160,48 @@ export async function registerRoutes(
   app.get("/api/silentwolf/title/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const url = `${IMDB_API_BASE}/v2/title/${id}`;
+      const url = `${IMDB_API_BASE}/titles/${id}`;
       const r = await fetch(url, {
         headers: { "Content-Type": "application/json" },
         signal: AbortSignal.timeout(15000),
       });
       if (!r.ok) throw new Error(`API error: ${r.status}`);
       const data = await r.json();
-      res.json(data);
+
+      let seasons: { seasonNumber: number; episodeCount: number }[] = [];
+      let totalSeasons = 0;
+      let totalEpisodes = 0;
+
+      if (data.type === "tvSeries" || data.type === "tvMiniSeries") {
+        try {
+          const seasonsUrl = `${IMDB_API_BASE}/titles/${id}/seasons`;
+          const sRes = await fetch(seasonsUrl, {
+            headers: { "Content-Type": "application/json" },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            if (sData.seasons && Array.isArray(sData.seasons)) {
+              seasons = sData.seasons.map((s: any) => ({
+                seasonNumber: parseInt(s.season, 10),
+                episodeCount: s.episodeCount || 0,
+              }));
+              totalSeasons = seasons.length;
+              totalEpisodes = seasons.reduce((sum, s) => sum + s.episodeCount, 0);
+            }
+          }
+        } catch {}
+      }
+
+      const runtime = data.runtimeSeconds ? Math.round(data.runtimeSeconds / 60) : 0;
+
+      res.json({
+        ...data,
+        runtime,
+        totalSeasons,
+        totalEpisodes,
+        seasons,
+      });
     } catch (e: any) {
       res.status(502).json({ error: "Title details temporarily unavailable.", detail: e.message });
     }
