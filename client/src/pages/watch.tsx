@@ -1,12 +1,12 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRoute, useLocation } from "wouter";
-import { ArrowLeft, Star, Calendar, Clock, Loader2, Play, Film, Tv } from "lucide-react";
+import { useRoute, useLocation, useSearch } from "wouter";
+import { ArrowLeft, Star, Clock, Loader2, Play, Film, Tv } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
 import { ContentCard } from "@/components/content-card";
-import { type SubjectItem, type RecommendResponse, getRating, getYear, getPosterUrl, getGenres, getMediaType } from "@/lib/tmdb";
+import { type RecommendResponse, getMediaType } from "@/lib/tmdb";
 
 interface PlayStream {
   format: string;
@@ -31,6 +31,10 @@ interface PlayResponse {
     streams: PlayStream[];
     subtitles: PlaySubtitle[];
     hasResource: boolean;
+    title?: string;
+    genre?: string;
+    imdbRating?: string;
+    cover?: string;
   };
 }
 
@@ -53,50 +57,37 @@ function formatDuration(seconds: number): string {
 export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const queryParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
   const type = params?.type || "movie";
   const subjectId = params?.id || "";
 
-  const urlParams = new URLSearchParams(window.location.search);
-  const titleFromUrl = urlParams.get("title") || "";
-  const detailPathFromUrl = urlParams.get("detailPath") || "";
+  const titleFromUrl = queryParams.get("title") || "";
+  const detailPathFromUrl = queryParams.get("detailPath") || "";
 
   const [selectedStreamIdx, setSelectedStreamIdx] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const { data: searchResult } = useQuery<any>({
-    queryKey: ["/api/wolflix/search", titleFromUrl],
-    enabled: !!titleFromUrl && !detailPathFromUrl,
+  const playUrl = useMemo(() => {
+    let url = `/api/wolflix/play?subjectId=${subjectId}`;
+    if (detailPathFromUrl) url += `&detailPath=${encodeURIComponent(detailPathFromUrl)}`;
+    if (titleFromUrl) url += `&title=${encodeURIComponent(titleFromUrl)}`;
+    return url;
+  }, [subjectId, detailPathFromUrl, titleFromUrl]);
+
+  const { data: playData, isLoading: playLoading, error: playError } = useQuery<PlayResponse>({
+    queryKey: ["/api/wolflix/play", subjectId, detailPathFromUrl, titleFromUrl],
+    enabled: !!subjectId,
     queryFn: async () => {
-      const res = await fetch(`/api/wolflix/search?keyword=${encodeURIComponent(titleFromUrl)}`);
-      if (!res.ok) return null;
+      const res = await fetch(playUrl);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to load streams");
+      }
       return res.json();
     },
-  });
-
-  const matchedItem: SubjectItem | null = useMemo(() => {
-    if (!searchResult?.data?.items) return null;
-    return searchResult.data.items.find((item: SubjectItem) => item.subjectId === subjectId) || searchResult.data.items[0] || null;
-  }, [searchResult, subjectId]);
-
-  const detailPath = detailPathFromUrl || matchedItem?.detailPath || "";
-  const itemData = matchedItem;
-  const title = titleFromUrl || itemData?.title || "";
-  const posterUrl = itemData ? getPosterUrl(itemData) : "";
-  const ratingStr = itemData ? getRating(itemData) : "";
-  const year = itemData ? getYear(itemData) : "";
-  const genres = itemData ? getGenres(itemData) : [];
-  const duration = itemData?.duration || 0;
-  const country = itemData?.countryName || "";
-
-  const { data: playData, isLoading: playLoading } = useQuery<PlayResponse>({
-    queryKey: ["/api/wolflix/play", subjectId, detailPath],
-    enabled: !!subjectId && !!detailPath,
-    queryFn: async () => {
-      const res = await fetch(`/api/wolflix/play?subjectId=${subjectId}&detailPath=${encodeURIComponent(detailPath)}`);
-      if (!res.ok) throw new Error("Failed to load streams");
-      return res.json();
-    },
-    retry: 1,
+    retry: 2,
+    retryDelay: 1000,
   });
 
   const { data: recommendations } = useQuery<RecommendResponse>({
@@ -112,6 +103,12 @@ export default function Watch() {
   const streams = playData?.data?.streams || [];
   const subtitles = playData?.data?.subtitles || [];
   const recommendedItems = recommendations?.data?.items || [];
+
+  const title = titleFromUrl || playData?.data?.title || "";
+  const coverUrl = playData?.data?.cover || "";
+  const rating = playData?.data?.imdbRating || "";
+  const genres = playData?.data?.genre ? playData.data.genre.split(",").map(g => g.trim()) : [];
+  const duration = streams[0]?.duration || 0;
 
   const sortedStreams = useMemo(() => {
     return [...streams].sort((a, b) => parseInt(b.resolutions) - parseInt(a.resolutions));
@@ -138,7 +135,7 @@ export default function Watch() {
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <h1 className="text-lg lg:text-xl font-display font-bold text-white truncate" data-testid="text-watch-title">
-              {title || "Loading..."}
+              {title || (playLoading ? "Loading..." : "Untitled")}
             </h1>
           </div>
           <Badge variant="outline" className="text-green-400 border-green-500/20 font-mono text-xs flex-shrink-0">
@@ -163,6 +160,7 @@ export default function Watch() {
                 src={selectedStream.url}
                 controls
                 autoPlay
+                playsInline
                 className="absolute inset-0 w-full h-full"
                 data-testid="video-player"
               >
@@ -180,10 +178,30 @@ export default function Watch() {
           ) : (
             <div className="w-full aspect-video bg-black flex items-center justify-center">
               <div className="text-center">
-                <Play className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
-                <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
-                  {detailPath ? "No streaming source available" : "Loading content info..."}
-                </p>
+                {playError ? (
+                  <>
+                    <Play className="w-10 h-10 text-red-500/40 mx-auto mb-3" />
+                    <p className="text-sm font-mono text-red-400" data-testid="text-stream-error">
+                      {(playError as Error).message || "Failed to load stream"}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => window.location.reload()}
+                      className="mt-3 text-green-400 font-mono"
+                      data-testid="button-retry"
+                    >
+                      Retry
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
+                    <p className="text-sm font-mono text-gray-500" data-testid="text-no-source">
+                      No streaming source available
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -209,37 +227,26 @@ export default function Watch() {
         )}
 
         <div className="flex flex-col lg:flex-row gap-6 mt-4">
-          {posterUrl && (
+          {coverUrl && (
             <div className="flex-shrink-0 hidden lg:block">
               <GlassCard hover={false} className="overflow-hidden w-[200px]">
-                <img src={posterUrl} alt={title} className="w-full rounded-[1rem]" data-testid="img-poster" />
+                <img src={coverUrl} alt={title} className="w-full rounded-[1rem]" data-testid="img-poster" />
               </GlassCard>
             </div>
           )}
 
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-3 mb-3">
-              {ratingStr && (
+              {rating && (
                 <span className="flex items-center gap-1 text-sm font-mono text-green-400" data-testid="text-rating">
                   <Star className="w-4 h-4 fill-green-400" />
-                  {ratingStr}
-                </span>
-              )}
-              {year && (
-                <span className="flex items-center gap-1 text-sm font-mono text-gray-400" data-testid="text-year">
-                  <Calendar className="w-4 h-4" />
-                  {year}
+                  {rating}
                 </span>
               )}
               {duration > 0 && (
                 <span className="flex items-center gap-1 text-sm font-mono text-gray-400" data-testid="text-runtime">
                   <Clock className="w-4 h-4" />
                   {formatDuration(duration)}
-                </span>
-              )}
-              {country && (
-                <span className="text-xs font-mono text-gray-500" data-testid="text-country">
-                  {country}
                 </span>
               )}
             </div>
@@ -254,28 +261,20 @@ export default function Watch() {
               </div>
             )}
 
-            {itemData?.description && (
-              <p className="text-sm text-gray-300 leading-relaxed max-w-2xl" data-testid="text-watch-overview">
-                {itemData.description}
-              </p>
-            )}
-
             {sortedStreams.length > 0 && (
               <div className="mt-4">
-                <h3 className="text-sm font-mono text-gray-500 mb-2">Direct Downloads</h3>
+                <h3 className="text-sm font-mono text-gray-500 mb-2">Available Streams</h3>
                 <div className="space-y-2">
-                  {sortedStreams.map((stream) => (
-                    <a
+                  {sortedStreams.map((stream, idx) => (
+                    <button
                       key={stream.id}
-                      href={stream.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between gap-4 p-3 rounded-xl bg-black/40 border border-green-500/10 hover-elevate transition-colors"
-                      data-testid={`link-download-${stream.resolutions}`}
+                      onClick={() => setSelectedStreamIdx(idx)}
+                      className={`flex items-center justify-between gap-4 p-3 rounded-xl w-full text-left transition-colors ${selectedStreamIdx === idx ? "bg-green-500/15 border border-green-500/30" : "bg-black/40 border border-green-500/10 hover-elevate"}`}
+                      data-testid={`button-stream-${stream.resolutions}`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-green-500/10 p-2">
-                          <Play className="w-4 h-4 text-green-400" />
+                        <div className={`rounded-lg p-2 ${selectedStreamIdx === idx ? "bg-green-500/20" : "bg-green-500/10"}`}>
+                          <Play className={`w-4 h-4 ${selectedStreamIdx === idx ? "text-green-400" : "text-green-500/50"}`} />
                         </div>
                         <div>
                           <p className="text-sm font-mono text-white font-medium">{stream.resolutions}p {stream.format}</p>
@@ -285,7 +284,25 @@ export default function Watch() {
                           </p>
                         </div>
                       </div>
-                    </a>
+                      {selectedStreamIdx === idx && (
+                        <Badge variant="outline" className="text-green-400 border-green-500/30 font-mono text-xs">
+                          Playing
+                        </Badge>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {subtitles.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-mono text-gray-500 mb-2">Subtitles ({subtitles.length} languages)</h3>
+                <div className="flex flex-wrap gap-2">
+                  {subtitles.map((sub) => (
+                    <Badge key={sub.languageCode} variant="outline" className="text-gray-400 border-green-500/10 font-mono text-xs">
+                      {sub.language}
+                    </Badge>
                   ))}
                 </div>
               </div>

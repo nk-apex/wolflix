@@ -150,11 +150,64 @@ export async function registerRoutes(
     }
   });
 
+  const detailPathCache = new Map<string, string>();
+
+  async function resolveDetailPath(subjectId: string, title?: string): Promise<string | null> {
+    const cached = detailPathCache.get(subjectId);
+    if (cached) return cached;
+
+    try {
+      const [trending, hot] = await Promise.allSettled([
+        apiFetch("/trending"),
+        apiFetch("/hot"),
+      ]);
+
+      const allItems: any[] = [];
+      if (trending.status === "fulfilled") {
+        allItems.push(...(trending.value?.data?.subjectList || []));
+      }
+      if (hot.status === "fulfilled") {
+        allItems.push(...(hot.value?.data?.movie || []));
+        allItems.push(...(hot.value?.data?.tv || []));
+      }
+
+      const found = allItems.find((item: any) => item.subjectId === subjectId);
+      if (found?.detailPath) {
+        detailPathCache.set(subjectId, found.detailPath);
+        return found.detailPath;
+      }
+
+      if (title) {
+        const searchData = await apiFetch(`/search?keyword=${encodeURIComponent(title)}`);
+        const searchItems = searchData?.data?.items || [];
+        const match = searchItems.find((item: any) => item.subjectId === subjectId) || searchItems[0];
+        if (match?.detailPath) {
+          detailPathCache.set(subjectId, match.detailPath);
+          return match.detailPath;
+        }
+      }
+    } catch {}
+
+    return null;
+  }
+
   app.get("/api/wolflix/play", async (req, res) => {
     try {
       const subjectId = req.query.subjectId as string;
-      const detailPath = req.query.detailPath as string;
-      if (!subjectId || !detailPath) return res.status(400).json({ success: false, error: "subjectId and detailPath required" });
+      let detailPath = req.query.detailPath as string;
+      if (!subjectId) return res.status(400).json({ success: false, error: "subjectId required" });
+
+      if (!detailPath) {
+        const title = req.query.title as string || "";
+        const resolved = await resolveDetailPath(subjectId, title);
+        if (!resolved) return res.status(404).json({ success: false, error: "Could not resolve content path" });
+        detailPath = resolved;
+      }
+
+      if (detailPath) {
+        detailPathCache.set(subjectId, detailPath);
+      }
+
       const ep = req.query.ep as string || "";
       const season = req.query.season as string || "";
       let path = `/play?subjectId=${subjectId}&detailPath=${encodeURIComponent(detailPath)}`;
