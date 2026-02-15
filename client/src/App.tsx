@@ -11,16 +11,7 @@ import NotFound from "@/pages/not-found";
 import Welcome from "@/pages/welcome";
 import Movies from "@/pages/movies";
 import TVShows from "@/pages/tv-shows";
-import Series from "@/pages/series";
-import Animation from "@/pages/animation";
-import Novel from "@/pages/novel";
-import MostViewed from "@/pages/most-viewed";
-import Application from "@/pages/application";
-import MusicPage from "@/pages/music";
-import SportPage from "@/pages/sport";
 import SearchPage from "@/pages/search";
-import SettingsPage from "@/pages/settings";
-import Profile from "@/pages/profile";
 import Watch from "@/pages/watch";
 
 function Router() {
@@ -29,16 +20,7 @@ function Router() {
       <Route path="/" component={Welcome} />
       <Route path="/movies" component={Movies} />
       <Route path="/tv-shows" component={TVShows} />
-      <Route path="/series" component={Series} />
-      <Route path="/animation" component={Animation} />
-      <Route path="/novel" component={Novel} />
-      <Route path="/most-viewed" component={MostViewed} />
-      <Route path="/application" component={Application} />
-      <Route path="/music" component={MusicPage} />
-      <Route path="/sport" component={SportPage} />
       <Route path="/search" component={SearchPage} />
-      <Route path="/settings" component={SettingsPage} />
-      <Route path="/profile" component={Profile} />
       <Route path="/watch/:type/:id" component={Watch} />
       <Route component={NotFound} />
     </Switch>

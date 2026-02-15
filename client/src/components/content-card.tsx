@@ -1,23 +1,27 @@
-import { Play, Download, Star } from "lucide-react";
+import { Play, Star } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "./glass-card";
-import { type BWMTitle, getMediaType, getRating, getYear, getPosterUrl } from "@/lib/tmdb";
+import { type SubjectItem, getMediaType, getRating, getYear, getPosterUrl } from "@/lib/tmdb";
 
 interface ContentCardProps {
-  item: BWMTitle;
+  item: SubjectItem;
   type?: "movie" | "tv";
 }
 
 export function ContentCard({ item, type }: ContentCardProps) {
   const [, navigate] = useLocation();
-  const title = item.primaryTitle || "Untitled";
-  const year = getYear(item.startYear);
+  const title = item.title || "Untitled";
+  const year = getYear(item);
   const posterUrl = getPosterUrl(item);
-  const mediaType = type || getMediaType(item.type);
-  const ratingStr = getRating(item.rating);
+  const mediaType = type || getMediaType(item.subjectType);
+  const ratingStr = getRating(item);
 
-  const goToWatch = () => navigate(`/watch/${mediaType}/${item.id}?source=zone&title=${encodeURIComponent(title)}`);
+  const goToWatch = () => {
+    let url = `/watch/${mediaType}/${item.subjectId}?title=${encodeURIComponent(title)}`;
+    if (item.detailPath) url += `&detailPath=${encodeURIComponent(item.detailPath)}`;
+    navigate(url);
+  };
 
   return (
     <GlassCard className="group overflow-visible flex-shrink-0 w-[180px]" onClick={goToWatch}>
@@ -28,7 +32,7 @@ export function ContentCard({ item, type }: ContentCardProps) {
             alt={title}
             className="w-full h-full object-cover"
             loading="lazy"
-            data-testid={`img-poster-${item.id}`}
+            data-testid={`img-poster-${item.subjectId}`}
           />
         ) : (
           <div className="w-full h-full bg-green-900/20 flex items-center justify-center">
@@ -41,31 +45,22 @@ export function ContentCard({ item, type }: ContentCardProps) {
             size="sm"
             onClick={(e) => { e.stopPropagation(); goToWatch(); }}
             className="flex-1 bg-green-500 text-black font-mono font-bold text-xs"
-            data-testid={`button-stream-${item.id}`}
+            data-testid={`button-stream-${item.subjectId}`}
           >
             <Play className="w-3 h-3 mr-1" />
             Watch
           </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={(e) => { e.stopPropagation(); goToWatch(); }}
-            className="bg-white/10 text-white"
-            data-testid={`button-download-${item.id}`}
-          >
-            <Download className="w-3 h-3" />
-          </Button>
         </div>
         {ratingStr && (
-          <div className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-xs font-mono" data-testid={`text-rating-${item.id}`}>
+          <div className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-xs font-mono" data-testid={`text-rating-${item.subjectId}`}>
             <Star className="w-3 h-3 text-green-400 fill-green-400" />
             <span className="text-green-400">{ratingStr}</span>
           </div>
         )}
       </div>
       <div className="p-3">
-        <h3 className="text-sm font-display font-bold text-white truncate" data-testid={`text-title-${item.id}`}>{title}</h3>
-        {year && <p className="text-xs font-mono text-gray-500 mt-0.5" data-testid={`text-year-${item.id}`}>{year}</p>}
+        <h3 className="text-sm font-display font-bold text-white truncate" data-testid={`text-title-${item.subjectId}`}>{title}</h3>
+        {year && <p className="text-xs font-mono text-gray-500 mt-0.5" data-testid={`text-year-${item.subjectId}`}>{year}</p>}
       </div>
     </GlassCard>
   );

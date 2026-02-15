@@ -1,13 +1,13 @@
 import { ChevronRight } from "lucide-react";
 import { ContentCard } from "./content-card";
-import { type BWMTitle } from "@/lib/tmdb";
+import { type SubjectItem } from "@/lib/tmdb";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRef, useState } from "react";
 
 interface ContentRowProps {
   title: string;
   icon?: React.ReactNode;
-  items: BWMTitle[];
+  items: SubjectItem[];
   type?: "movie" | "tv";
   isLoading?: boolean;
 }
@@ -68,7 +68,7 @@ export function ContentRow({ title, icon, items, type = "movie", isLoading }: Co
                 </div>
               ))
             : items.map((item) => (
-                <ContentCard key={item.id} item={item} type={type} />
+                <ContentCard key={item.subjectId} item={item} type={type} />
               ))}
         </div>
         {canScrollRight && (

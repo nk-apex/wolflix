@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Film, Play, TrendingUp, Tv, Clock, Zap, ArrowRight, Activity, Search, ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { GlassCard, GlassPanel } from "@/components/glass-card";
+import { GlassCard } from "@/components/glass-card";
 import { useQuery } from "@tanstack/react-query";
-import { type BWMTitle, type BWMResponse, getRating, getYear, getPosterUrl, getMediaType } from "@/lib/tmdb";
+import { type TrendingResponse, type HotResponse, type HomepageResponse, type SubjectItem, getRating, getYear, getPosterUrl, getMediaType } from "@/lib/tmdb";
 import { ContentCard } from "@/components/content-card";
+import { ContentRow } from "@/components/content-row";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ const stats = [
 
 const quickActions = [
   { label: "Browse Now", icon: Play, href: "/movies" },
-  { label: "Top Picks", icon: TrendingUp, href: "/most-viewed" },
+  { label: "Top Picks", icon: TrendingUp, href: "/movies" },
   { label: "TV Shows", icon: Tv, href: "/tv-shows" },
 ];
 
@@ -27,13 +28,27 @@ export default function Welcome() {
   const [searchQuery, setSearchQuery] = useState("");
   const [heroIndex, setHeroIndex] = useState(0);
 
-  const { data: trending, isLoading } = useQuery<BWMResponse>({
-    queryKey: ["/api/silentwolf/category", "trending"],
+  const { data: homepage } = useQuery<HomepageResponse>({
+    queryKey: ["/api/wolflix/homepage"],
   });
 
-  const allItems = trending?.titles || [];
-  const heroItems = allItems.slice(0, 8);
-  const trendingItems = allItems.slice(0, 12);
+  const { data: trending, isLoading: trendingLoading } = useQuery<TrendingResponse>({
+    queryKey: ["/api/wolflix/trending"],
+  });
+
+  const { data: hot, isLoading: hotLoading } = useQuery<HotResponse>({
+    queryKey: ["/api/wolflix/hot"],
+  });
+
+  const bannerItems = homepage?.data?.operatingList?.find(op => op.type === "BANNER")?.banner?.items || [];
+  const trendingItems = trending?.data?.subjectList || [];
+  const hotMovies = hot?.data?.movie || [];
+  const hotTV = hot?.data?.tv || [];
+
+  const heroItems = bannerItems.length > 0
+    ? bannerItems.map(b => b.subject).filter(Boolean).slice(0, 8)
+    : trendingItems.slice(0, 8);
+
   const featured = heroItems[heroIndex];
 
   const nextHero = useCallback(() => {
@@ -66,7 +81,7 @@ export default function Welcome() {
           const posterUrl = getPosterUrl(item);
           return (
             <div
-              key={item.id}
+              key={item.subjectId + idx}
               className={`absolute inset-0 transition-opacity duration-700 ${idx === heroIndex ? "opacity-100" : "opacity-0 pointer-events-none"}`}
             >
               {posterUrl && (
@@ -140,22 +155,22 @@ export default function Welcome() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-xs font-mono text-green-400 uppercase tracking-wider">Featured</span>
-                  {getRating(featured.rating) && (
+                  {getRating(featured) && (
                     <span className="flex items-center gap-1 text-xs font-mono text-green-400">
                       <Star className="w-3 h-3 fill-green-400" />
-                      {getRating(featured.rating)}
+                      {getRating(featured)}
                     </span>
                   )}
-                  {featured.startYear && (
+                  {getYear(featured) && (
                     <span className="text-xs font-mono text-gray-500">
-                      {featured.startYear}
+                      {getYear(featured)}
                     </span>
                   )}
                 </div>
                 <h2 className="text-2xl md:text-3xl font-display font-bold text-white mb-2" data-testid="text-hero-title">
-                  {featured.primaryTitle}
+                  {featured.title}
                 </h2>
-                <Link href={`/watch/${getMediaType(featured.type)}/${featured.id}?source=zone&title=${encodeURIComponent(featured.primaryTitle)}`}>
+                <Link href={`/watch/${getMediaType(featured.subjectType)}/${featured.subjectId}?title=${encodeURIComponent(featured.title)}${featured.detailPath ? `&detailPath=${encodeURIComponent(featured.detailPath)}` : ""}`}>
                   <button
                     className="flex items-center gap-2 rounded-xl bg-green-500 px-5 py-2 font-mono text-sm font-bold text-black transition-all hover:bg-green-400"
                     data-testid="button-stream-featured"
@@ -217,25 +232,28 @@ export default function Welcome() {
           ))}
         </div>
 
-        <div className="mb-10">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp className="w-5 h-5 text-green-400" />
-            <h2 className="text-xl font-display font-bold text-white">Trending Now</h2>
-          </div>
-          <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-            {isLoading
-              ? Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="flex-shrink-0 w-[180px]">
-                    <Skeleton className="w-full aspect-[2/3] rounded-2xl bg-green-900/10" />
-                    <Skeleton className="w-3/4 h-4 mt-3 rounded bg-green-900/10" />
-                  </div>
-                ))
-              : trendingItems.map((item) => (
-                  <ContentCard key={item.id} item={item} type={getMediaType(item.type)} />
-                ))}
-          </div>
-        </div>
+        <ContentRow
+          title="Trending Now"
+          icon={<TrendingUp className="w-5 h-5" />}
+          items={trendingItems.slice(0, 15)}
+          isLoading={trendingLoading}
+        />
 
+        <ContentRow
+          title="Hot Movies"
+          icon={<Film className="w-5 h-5" />}
+          items={hotMovies.slice(0, 15)}
+          type="movie"
+          isLoading={hotLoading}
+        />
+
+        <ContentRow
+          title="Hot TV Shows"
+          icon={<Tv className="w-5 h-5" />}
+          items={hotTV.slice(0, 15)}
+          type="tv"
+          isLoading={hotLoading}
+        />
       </div>
     </div>
   );

@@ -1,9 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { 
-  Film, Tv, Theater, Palette, BookOpen, 
-  Flame, Smartphone, Search, Settings, User, Clapperboard,
-  Music2, Trophy
-} from "lucide-react";
+import { Film, Tv, Search, Clapperboard } from "lucide-react";
 import wolflixLogo from "@assets/wolflix-logo.png";
 import {
   Sidebar,
@@ -20,22 +16,13 @@ import {
 } from "@/components/ui/sidebar";
 
 const mainMenu = [
-  { title: "Welcome", url: "/", icon: Clapperboard },
+  { title: "Home", url: "/", icon: Clapperboard },
   { title: "Movies", url: "/movies", icon: Film },
   { title: "TV Shows", url: "/tv-shows", icon: Tv },
-  { title: "Series", url: "/series", icon: Theater },
-  { title: "Animation", url: "/animation", icon: Palette },
-  { title: "Music", url: "/music", icon: Music2 },
-  { title: "Sport", url: "/sport", icon: Trophy },
-  { title: "Novel", url: "/novel", icon: BookOpen },
-  { title: "Most Viewed", url: "/most-viewed", icon: Flame },
-  { title: "Application", url: "/application", icon: Smartphone },
 ];
 
 const secondaryMenu = [
   { title: "Search", url: "/search", icon: Search },
-  { title: "Settings", url: "/settings", icon: Settings },
-  { title: "Profile", url: "/profile", icon: User },
 ];
 
 export function AppSidebar() {
@@ -57,7 +44,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-mono text-gray-600 uppercase tracking-widest px-4">
-            Menu
+            Browse
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

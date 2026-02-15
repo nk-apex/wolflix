@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Search as SearchIcon, X, Film, Tv, Star } from "lucide-react";
-import { type BWMTitle, type BWMResponse, getMediaType, getRating, getPosterUrl } from "@/lib/tmdb";
+import { type SubjectItem, type SearchResponse, type PopularSearchResponse, getMediaType, getRating, getPosterUrl, getYear } from "@/lib/tmdb";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SearchPage() {
@@ -20,14 +20,19 @@ export default function SearchPage() {
     }
   }, [location]);
 
-  const { data: bwmData, isLoading } = useQuery<BWMResponse>({
-    queryKey: ["/api/silentwolf/search", searchTerm],
+  const { data: searchData, isLoading } = useQuery<SearchResponse>({
+    queryKey: ["/api/wolflix/search", searchTerm],
     enabled: searchTerm.length > 1,
     queryFn: async () => {
-      const res = await fetch(`/api/silentwolf/search?q=${encodeURIComponent(searchTerm)}`);
+      const res = await fetch(`/api/wolflix/search?keyword=${encodeURIComponent(searchTerm)}`);
       if (!res.ok) throw new Error("Search failed");
       return res.json();
     },
+  });
+
+  const { data: popularSearch } = useQuery<PopularSearchResponse>({
+    queryKey: ["/api/wolflix/popular-search"],
+    enabled: !searchTerm,
   });
 
   const handleSearch = (e: React.FormEvent) => {
@@ -35,11 +40,19 @@ export default function SearchPage() {
     setSearchTerm(query.trim());
   };
 
-  const results = (bwmData?.titles || []).filter(t => t.primaryImage?.url);
+  const results = searchData?.data?.items || [];
+  const popularTerms = popularSearch?.data?.everyoneSearch || [];
 
-  const handleResultClick = (item: BWMTitle) => {
-    const mediaType = getMediaType(item.type);
-    navigate(`/watch/${mediaType}/${item.id}?source=zone&title=${encodeURIComponent(item.primaryTitle)}`);
+  const handleResultClick = (item: SubjectItem) => {
+    const mediaType = getMediaType(item.subjectType);
+    let url = `/watch/${mediaType}/${item.subjectId}?title=${encodeURIComponent(item.title)}`;
+    if (item.detailPath) url += `&detailPath=${encodeURIComponent(item.detailPath)}`;
+    navigate(url);
+  };
+
+  const handlePopularClick = (title: string) => {
+    setQuery(title);
+    setSearchTerm(title);
   };
 
   return (
@@ -76,7 +89,7 @@ export default function SearchPage() {
       {searchTerm && !isLoading && results.length > 0 && (
         <div className="mb-4">
           <p className="text-xs font-mono text-gray-500">
-            Wolflix Results ({results.length})
+            Results ({searchData?.data?.pager?.totalCount || results.length})
           </p>
         </div>
       )}
@@ -96,22 +109,29 @@ export default function SearchPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {results.map((item) => {
             const posterUrl = getPosterUrl(item);
-            const mediaType = getMediaType(item.type);
-            const ratingStr = getRating(item.rating);
+            const mediaType = getMediaType(item.subjectType);
+            const ratingStr = getRating(item);
+            const year = getYear(item);
             return (
               <div
-                key={item.id}
+                key={item.subjectId}
                 onClick={() => handleResultClick(item)}
                 className="cursor-pointer group"
-                data-testid={`card-result-${item.id}`}
+                data-testid={`card-result-${item.subjectId}`}
               >
                 <div className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-green-500/10 bg-black/40">
-                  <img
-                    src={posterUrl}
-                    alt={item.primaryTitle}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    loading="lazy"
-                  />
+                  {posterUrl ? (
+                    <img
+                      src={posterUrl}
+                      alt={item.title}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Film className="w-10 h-10 text-green-500/20" />
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   {ratingStr && (
                     <div className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-black/70 backdrop-blur-sm px-1.5 py-0.5 text-xs font-mono">
@@ -120,9 +140,11 @@ export default function SearchPage() {
                     </div>
                   )}
                 </div>
-                <p className="text-xs font-mono text-white mt-2 line-clamp-1">{item.primaryTitle}</p>
+                <p className="text-xs font-mono text-white mt-2 line-clamp-1">{item.title}</p>
                 <div className="flex items-center gap-1.5">
-                  <p className="text-[10px] font-mono text-gray-500">{item.startYear || ""} {mediaType === "tv" ? <Tv className="inline w-3 h-3" /> : <Film className="inline w-3 h-3" />}</p>
+                  <p className="text-[10px] font-mono text-gray-500">
+                    {year} {mediaType === "tv" ? <Tv className="inline w-3 h-3" /> : <Film className="inline w-3 h-3" />}
+                  </p>
                 </div>
               </div>
             );
@@ -138,13 +160,30 @@ export default function SearchPage() {
       )}
 
       {!searchTerm && (
-        <div className="text-center py-20">
+        <div className="text-center py-12">
           <div className="flex items-center justify-center gap-4 mb-4">
             <Film className="w-8 h-8 text-green-500/20" />
             <Tv className="w-8 h-8 text-green-500/20" />
           </div>
-          <p className="text-gray-500 font-mono text-sm">Search for movies, TV shows, and more</p>
-          <p className="text-gray-600 font-mono text-xs mt-1">Powered by SilentWolf</p>
+          <p className="text-gray-500 font-mono text-sm mb-6">Search for movies, TV shows, and more</p>
+
+          {popularTerms.length > 0 && (
+            <div className="max-w-md mx-auto">
+              <p className="text-xs font-mono text-gray-600 uppercase tracking-wider mb-3">Popular Searches</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {popularTerms.map((term) => (
+                  <button
+                    key={term.title}
+                    onClick={() => handlePopularClick(term.title)}
+                    className="rounded-xl border border-green-500/20 bg-green-500/5 px-4 py-2 font-mono text-xs text-green-400 hover:bg-green-500/15 hover:border-green-500/40 transition-all"
+                    data-testid={`button-popular-${term.title}`}
+                  >
+                    {term.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
