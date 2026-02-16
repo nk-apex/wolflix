@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { ContentRow } from "@/components/content-row";
+import { ContentGrid } from "@/components/content-grid";
 import { type HotResponse, type TrendingResponse, type SubjectItem } from "@/lib/tmdb";
-import { Flame, Tv } from "lucide-react";
+import { Flame, Tv, TrendingUp } from "lucide-react";
 
 export default function TVShows() {
   const { data: hot, isLoading: hotLoading } = useQuery<HotResponse>({
@@ -31,7 +31,7 @@ export default function TVShows() {
   const topGenres = Object.entries(genreGroups)
     .filter(([, items]) => items.length >= 3)
     .sort((a, b) => b[1].length - a[1].length)
-    .slice(0, 5);
+    .slice(0, 8);
 
   return (
     <div className="min-h-screen px-6 py-8 max-w-6xl mx-auto">
@@ -40,7 +40,7 @@ export default function TVShows() {
         <h1 className="text-3xl font-display font-bold text-white mt-1" data-testid="text-tvshows-heading">TV Shows</h1>
       </div>
 
-      <ContentRow
+      <ContentGrid
         title="Hot TV Shows"
         icon={<Flame className="w-5 h-5" />}
         items={hotTV}
@@ -49,9 +49,9 @@ export default function TVShows() {
       />
 
       {trendingTV.length > 0 && (
-        <ContentRow
+        <ContentGrid
           title="Trending TV Shows"
-          icon={<Tv className="w-5 h-5" />}
+          icon={<TrendingUp className="w-5 h-5" />}
           items={trendingTV}
           type="tv"
           isLoading={trendingLoading}
@@ -59,9 +59,10 @@ export default function TVShows() {
       )}
 
       {topGenres.map(([genre, items]) => (
-        <ContentRow
+        <ContentGrid
           key={genre}
           title={genre}
+          icon={<Tv className="w-5 h-5" />}
           items={items}
           type="tv"
         />

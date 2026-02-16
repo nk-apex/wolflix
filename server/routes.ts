@@ -414,5 +414,63 @@ export async function registerRoutes(
 </html>`);
   });
 
+  app.get("/api/wolflix/music/mp4", async (req, res) => {
+    const url = req.query.url as string;
+    if (!url) return res.status(400).json({ success: false, error: "URL required" });
+
+    const cacheKey = `music-mp4-${url}`;
+    const cached = getCached(cacheKey);
+    if (cached) return res.json(cached);
+
+    try {
+      const apiRes = await fetch(`https://apis.xwolf.space/download/mp4?url=${encodeURIComponent(url)}`, {
+        signal: AbortSignal.timeout(30000),
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      });
+      const data = await apiRes.json();
+      if (data.success) setCache(cacheKey, data);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message || "Failed to fetch MP4" });
+    }
+  });
+
+  app.get("/api/wolflix/music/mp3", async (req, res) => {
+    const url = req.query.url as string;
+    if (!url) return res.status(400).json({ success: false, error: "URL required" });
+
+    const cacheKey = `music-mp3-${url}`;
+    const cached = getCached(cacheKey);
+    if (cached) return res.json(cached);
+
+    try {
+      const apiRes = await fetch(`https://apis.xwolf.space/download/ytmp3?url=${encodeURIComponent(url)}`, {
+        signal: AbortSignal.timeout(30000),
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      });
+      const data = await apiRes.json();
+      if (data.success) setCache(cacheKey, data);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message || "Failed to fetch MP3" });
+    }
+  });
+
+  app.get("/api/wolflix/music/download", async (req, res) => {
+    const url = req.query.url as string;
+    if (!url) return res.status(400).json({ success: false, error: "URL required" });
+
+    try {
+      const apiRes = await fetch(`https://apis.xwolf.space/download/dlmp3?url=${encodeURIComponent(url)}`, {
+        signal: AbortSignal.timeout(30000),
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      });
+      const data = await apiRes.json();
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message || "Failed to fetch download link" });
+    }
+  });
+
   return httpServer;
 }

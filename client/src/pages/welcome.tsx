@@ -4,7 +4,7 @@ import { GlassCard } from "@/components/glass-card";
 import { useQuery } from "@tanstack/react-query";
 import { type TrendingResponse, type HotResponse, type HomepageResponse, type SubjectItem, getRating, getYear, getPosterUrl, getMediaType } from "@/lib/tmdb";
 import { ContentCard } from "@/components/content-card";
-import { ContentRow } from "@/components/content-row";
+import { ContentGrid } from "@/components/content-grid";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -76,7 +76,7 @@ export default function Welcome() {
 
   return (
     <div className="min-h-screen">
-      <div className="relative overflow-hidden min-h-[520px]">
+      <div className="relative overflow-hidden min-h-[420px]">
         {heroItems.map((item, idx) => {
           const posterUrl = getPosterUrl(item);
           return (
@@ -99,21 +99,21 @@ export default function Welcome() {
           );
         })}
 
-        <div className="relative z-10 px-6 pt-12 pb-16 max-w-6xl mx-auto">
+        <div className="relative z-10 px-6 pt-10 pb-12 max-w-6xl mx-auto">
           <div className="mb-2">
             <span className="text-xs font-mono uppercase tracking-widest text-green-400">Welcome to</span>
           </div>
           <div className="flex items-center gap-4 mb-2">
-            <img src={wolflixLogo} alt="WOLFLIX" className="w-16 h-16 md:w-20 md:h-20 rounded-2xl object-cover" />
-            <h1 className="text-6xl md:text-7xl font-display font-bold text-white">
+            <img src={wolflixLogo} alt="WOLFLIX" className="w-14 h-14 md:w-16 md:h-16 rounded-2xl object-cover" />
+            <h1 className="text-5xl md:text-6xl font-display font-bold text-white">
               WOLF<span className="text-green-400">LIX</span>
             </h1>
           </div>
-          <p className="text-lg text-gray-400 font-mono max-w-xl mb-6">
+          <p className="text-base text-gray-400 font-mono max-w-xl mb-5">
             Your premium streaming platform. Discover movies, TV shows, and exclusive content all in one place.
           </p>
 
-          <form onSubmit={handleSearch} className="relative max-w-lg mb-8">
+          <form onSubmit={handleSearch} className="relative max-w-lg mb-6">
             <div className="flex items-center rounded-xl border border-green-500/30 bg-black/50 backdrop-blur-sm overflow-hidden focus-within:border-green-500/60 transition-colors">
               <Search className="w-5 h-5 text-green-500/60 ml-4 flex-shrink-0" />
               <input
@@ -121,7 +121,7 @@ export default function Welcome() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search movies, TV shows..."
-                className="flex-1 bg-transparent px-3 py-3 text-sm font-mono text-white placeholder:text-gray-500 outline-none"
+                className="flex-1 bg-transparent px-3 py-2.5 text-sm font-mono text-white placeholder:text-gray-500 outline-none"
                 data-testid="input-search-welcome"
               />
               <Button
@@ -135,11 +135,11 @@ export default function Welcome() {
             </div>
           </form>
 
-          <div className="flex flex-wrap gap-3 mb-8">
+          <div className="flex flex-wrap gap-3 mb-6">
             {quickActions.map((action) => (
               <Link key={action.label} href={action.href}>
                 <button
-                  className="group flex items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/10 px-5 py-2.5 font-mono text-sm text-green-400 transition-all hover:bg-green-500/20 hover:border-green-500/50"
+                  className="group flex items-center gap-2 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2 font-mono text-sm text-green-400 transition-all hover:bg-green-500/20 hover:border-green-500/50"
                   data-testid={`button-${action.label.toLowerCase().replace(/\s/g, "-")}`}
                 >
                   <action.icon className="w-4 h-4" />
@@ -232,25 +232,25 @@ export default function Welcome() {
           ))}
         </div>
 
-        <ContentRow
+        <ContentGrid
           title="Trending Now"
           icon={<TrendingUp className="w-5 h-5" />}
-          items={trendingItems.slice(0, 15)}
+          items={trendingItems}
           isLoading={trendingLoading}
         />
 
-        <ContentRow
+        <ContentGrid
           title="Hot Movies"
           icon={<Film className="w-5 h-5" />}
-          items={hotMovies.slice(0, 15)}
+          items={hotMovies}
           type="movie"
           isLoading={hotLoading}
         />
 
-        <ContentRow
+        <ContentGrid
           title="Hot TV Shows"
           icon={<Tv className="w-5 h-5" />}
-          items={hotTV.slice(0, 15)}
+          items={hotTV}
           type="tv"
           isLoading={hotLoading}
         />

@@ -4,7 +4,6 @@ import { useRoute, useLocation, useSearch } from "wouter";
 import { ArrowLeft, Star, Clock, Loader2, Play, Film, Tv, ChevronDown, AlertTriangle, RefreshCw, Monitor, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { GlassCard, GlassPanel } from "@/components/glass-card";
 import { ContentCard } from "@/components/content-card";
 import { type RecommendResponse, getMediaType } from "@/lib/tmdb";
 
@@ -142,11 +141,11 @@ export default function Watch() {
   const title = resolvedTitle;
   const coverUrl = detail?.cover?.url || "";
   const rating = detail?.imdbRatingValue || "";
-  const genres = (detail?.genre || "").split(",").map(g => g.trim()).filter(Boolean);
+  const genres = (detail?.genre || "").split(",").map((g: string) => g.trim()).filter(Boolean);
   const description = detail?.description || "";
   const cast = detail?.staffList || [];
-  const seasons = detail?.seasons || [];
-  const episodeList = detail?.episodeList || [];
+  const seasons: RichDetailSeason[] = detail?.seasons || [];
+  const episodeList: RichDetailEpisode[] = detail?.episodeList || [];
 
   const selectedProvider = showboxLinks[selectedProviderIdx];
 
@@ -157,12 +156,12 @@ export default function Watch() {
 
   const isTV = type === "tv";
   const availableSeasons = seasons.length > 0
-    ? seasons.map(s => s.seasonNumber)
+    ? seasons.map((s: RichDetailSeason) => s.seasonNumber)
     : episodeList.length > 0
       ? [1]
       : Array.from({ length: 10 }, (_, i) => i + 1);
 
-  const currentSeasonEpisodes = seasons.find(s => s.seasonNumber === selectedSeason)?.episodes
+  const currentSeasonEpisodes = seasons.find((s: RichDetailSeason) => s.seasonNumber === selectedSeason)?.episodes
     || (selectedSeason === 1 ? episodeList : []);
 
   const retryProvider = useCallback(() => {
@@ -178,199 +177,189 @@ export default function Watch() {
 
   return (
     <div className="min-h-screen bg-black">
-      <div className="relative z-10 px-4 lg:px-6 py-4 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-3 gap-2">
-          <div className="flex items-center gap-3 min-w-0">
+      <div className="relative w-full" style={{ height: "calc(100vh - 49px)" }}>
+        <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-3 py-2 bg-gradient-to-b from-black/80 to-transparent gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate("/")}
-              className="text-gray-400 flex-shrink-0"
+              onClick={() => navigate(-1)}
+              className="text-white/80 flex-shrink-0"
               data-testid="button-back"
             >
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <h1 className="text-lg lg:text-xl font-display font-bold text-white truncate" data-testid="text-watch-title">
+            <h1 className="text-sm lg:text-base font-display font-bold text-white truncate" data-testid="text-watch-title">
               {title || ((showboxLoading || !resolvedTitle) ? "Loading..." : "Untitled")}
             </h1>
           </div>
-          <Badge variant="outline" className="text-green-400 border-green-500/20 font-mono text-xs flex-shrink-0">
-            {isTV ? <Tv className="w-3 h-3 mr-1" /> : <Film className="w-3 h-3 mr-1" />}
-            {isTV ? "TV Show" : "Movie"}
-          </Badge>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {isTV && selectedProvider && (
+              <span className="text-xs font-mono text-green-400/80">
+                S{selectedSeason}:E{selectedEpisode}
+              </span>
+            )}
+            <Badge variant="outline" className="text-green-400 border-green-500/20 font-mono text-xs">
+              {isTV ? <Tv className="w-3 h-3 mr-1" /> : <Film className="w-3 h-3 mr-1" />}
+              {isTV ? "TV" : "Movie"}
+            </Badge>
+          </div>
         </div>
 
-        {isTV && (
-          <div className="flex flex-wrap gap-3 mb-4">
-            <div className="relative">
+        {(showboxLoading || (!resolvedTitle && !!subjectId)) ? (
+          <div className="w-full h-full bg-black flex items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="w-10 h-10 text-green-500 animate-spin mx-auto mb-3" />
+              <p className="text-sm font-mono text-gray-400">
+                {!resolvedTitle ? "Loading content info..." : "Finding stream sources..."}
+              </p>
+              <p className="text-xs font-mono text-gray-600 mt-1">
+                This may take 10-15 seconds
+              </p>
+            </div>
+          </div>
+        ) : selectedProvider ? (
+          <iframe
+            key={`${selectedProvider.url}-${iframeKey}`}
+            src={`/api/wolflix/player?url=${encodeURIComponent(selectedProvider.url)}`}
+            className="w-full h-full border-0"
+            allowFullScreen
+            allow="autoplay; fullscreen; encrypted-media; picture-in-picture; accelerometer; gyroscope"
+            data-testid="iframe-player"
+          />
+        ) : (
+          <div className="w-full h-full bg-black flex items-center justify-center">
+            <div className="text-center max-w-md px-6">
+              {showboxError ? (
+                <>
+                  <AlertTriangle className="w-10 h-10 text-red-500/40 mx-auto mb-3" />
+                  <p className="text-sm font-mono text-red-400 mb-1" data-testid="text-stream-error">
+                    Could not find stream sources
+                  </p>
+                  <p className="text-xs font-mono text-gray-500 mb-4">
+                    This title may not be available yet. Try refreshing or come back later.
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.location.reload()}
+                    className="text-green-400 font-mono"
+                    data-testid="button-retry"
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Play className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
+                  <p className="text-sm font-mono text-gray-500 mb-4" data-testid="text-no-source">
+                    No streaming source found for this title
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.location.reload()}
+                    className="text-green-400 font-mono"
+                    data-testid="button-retry"
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {showboxLinks.length > 0 && (
+          <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-3 py-3">
+            <div className="flex items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+              {showboxLinks.map((link: ShowBoxLink, idx: number) => (
+                <button
+                  key={link.provider + idx}
+                  onClick={() => { setSelectedProviderIdx(idx); setIframeKey(prev => prev + 1); }}
+                  className={`flex-shrink-0 rounded-lg px-3 py-1.5 font-mono text-xs transition-colors ${selectedProviderIdx === idx ? "bg-green-500 text-black font-bold" : "bg-white/10 text-white/70 backdrop-blur-sm"}`}
+                  data-testid={`button-provider-${link.provider}`}
+                >
+                  {link.provider}
+                </button>
+              ))}
+              <button
+                onClick={retryProvider}
+                className="flex-shrink-0 rounded-lg px-3 py-1.5 font-mono text-xs bg-white/10 text-white/70 backdrop-blur-sm flex items-center gap-1"
+                data-testid="button-reload-player"
+              >
+                <RefreshCw className="w-3 h-3" /> Reload
+              </button>
+              {selectedProvider && (
+                <a
+                  href={selectedProvider.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-shrink-0 rounded-lg px-3 py-1.5 font-mono text-xs bg-white/10 text-white/70 backdrop-blur-sm flex items-center gap-1"
+                  data-testid="link-open-current-provider"
+                >
+                  <ExternalLink className="w-3 h-3" /> New Tab
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isTV && (
+        <div className="px-4 py-3 bg-black/95 border-t border-green-500/10">
+          <div className="flex items-center gap-3 max-w-7xl mx-auto">
+            <div className="relative flex-shrink-0">
               <select
                 value={selectedSeason}
                 onChange={(e) => { setSelectedSeason(Number(e.target.value)); setSelectedEpisode(1); }}
-                className="appearance-none rounded-xl border border-green-500/20 bg-black/40 px-4 py-2 pr-8 font-mono text-sm text-white focus:outline-none focus:border-green-500/40"
+                className="appearance-none rounded-lg border border-green-500/20 bg-black/40 px-3 py-1.5 pr-7 font-mono text-xs text-white focus:outline-none focus:border-green-500/40"
                 data-testid="select-season"
               >
-                {availableSeasons.map((s) => (
+                {availableSeasons.map((s: number) => (
                   <option key={s} value={s}>Season {s}</option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500/50 pointer-events-none" />
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-green-500/50 pointer-events-none" />
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+            <div className="flex gap-1.5 overflow-x-auto flex-1" style={{ scrollbarWidth: "none" }}>
               {currentSeasonEpisodes.length > 0
-                ? currentSeasonEpisodes.map((ep) => (
+                ? currentSeasonEpisodes.map((ep: RichDetailEpisode) => (
                     <button
                       key={ep.episodeNumber}
                       onClick={() => setSelectedEpisode(ep.episodeNumber)}
-                      className={`flex-shrink-0 rounded-xl px-4 py-2 font-mono text-sm transition-colors ${selectedEpisode === ep.episodeNumber ? "bg-green-500/20 text-green-400 border border-green-500/30" : "border border-green-500/10 text-gray-400"}`}
+                      className={`flex-shrink-0 rounded-lg px-3 py-1.5 font-mono text-xs transition-colors ${selectedEpisode === ep.episodeNumber ? "bg-green-500 text-black font-bold" : "border border-green-500/15 text-gray-400"}`}
                       data-testid={`button-episode-${ep.episodeNumber}`}
                     >
-                      Ep {ep.episodeNumber}
+                      E{ep.episodeNumber}
                     </button>
                   ))
-                : Array.from({ length: 20 }, (_, i) => i + 1).map((ep) => (
+                : Array.from({ length: 20 }, (_, i) => i + 1).map((ep: number) => (
                     <button
                       key={ep}
                       onClick={() => setSelectedEpisode(ep)}
-                      className={`flex-shrink-0 rounded-xl px-4 py-2 font-mono text-sm transition-colors ${selectedEpisode === ep ? "bg-green-500/20 text-green-400 border border-green-500/30" : "border border-green-500/10 text-gray-400"}`}
+                      className={`flex-shrink-0 rounded-lg px-3 py-1.5 font-mono text-xs transition-colors ${selectedEpisode === ep ? "bg-green-500 text-black font-bold" : "border border-green-500/15 text-gray-400"}`}
                       data-testid={`button-episode-${ep}`}
                     >
-                      Ep {ep}
+                      E{ep}
                     </button>
                   ))
               }
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <GlassPanel className="mb-4 p-0 overflow-hidden">
-          {(showboxLoading || (!resolvedTitle && !!subjectId)) ? (
-            <div className="w-full aspect-video bg-black flex items-center justify-center">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 text-green-500 animate-spin mx-auto mb-3" />
-                <p className="text-sm font-mono text-gray-400">
-                  {!resolvedTitle ? "Loading content info..." : "Finding stream sources..."}
-                </p>
-                <p className="text-xs font-mono text-gray-600 mt-1">
-                  This may take 10-15 seconds
-                </p>
-              </div>
-            </div>
-          ) : selectedProvider ? (
-            <div className="relative w-full aspect-video bg-black">
-              <iframe
-                key={`${selectedProvider.url}-${iframeKey}`}
-                src={`/api/wolflix/player?url=${encodeURIComponent(selectedProvider.url)}`}
-                className="absolute inset-0 w-full h-full border-0"
-                allowFullScreen
-                allow="autoplay; fullscreen; encrypted-media; picture-in-picture; accelerometer; gyroscope"
-                data-testid="iframe-player"
-              />
-            </div>
-          ) : (
-            <div className="w-full aspect-video bg-black flex items-center justify-center">
-              <div className="text-center max-w-md px-6">
-                {showboxError ? (
-                  <>
-                    <AlertTriangle className="w-10 h-10 text-red-500/40 mx-auto mb-3" />
-                    <p className="text-sm font-mono text-red-400 mb-1" data-testid="text-stream-error">
-                      Could not find stream sources
-                    </p>
-                    <p className="text-xs font-mono text-gray-500 mb-4">
-                      This title may not be available yet. Try refreshing or come back later.
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => window.location.reload()}
-                      className="text-green-400 font-mono"
-                      data-testid="button-retry"
-                    >
-                      <RefreshCw className="w-3 h-3 mr-1" /> Retry
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
-                    <p className="text-sm font-mono text-gray-500 mb-4" data-testid="text-no-source">
-                      No streaming source found for this title
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => window.location.reload()}
-                      className="text-green-400 font-mono"
-                      data-testid="button-retry"
-                    >
-                      <RefreshCw className="w-3 h-3 mr-1" /> Retry
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </GlassPanel>
-
-        {showboxLinks.length > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-              <div className="flex items-center gap-2 text-xs font-mono text-gray-500">
-                <Monitor className="w-3 h-3" />
-                <span>Stream providers ({showboxLinks.length})</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={retryProvider}
-                  className="text-gray-400 font-mono text-xs"
-                  data-testid="button-reload-player"
-                >
-                  <RefreshCw className="w-3 h-3 mr-1" /> Reload
-                </Button>
-                {selectedProvider && (
-                  <a
-                    href={selectedProvider.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs font-mono text-green-400"
-                    data-testid="link-open-current-provider"
-                  >
-                    <ExternalLink className="w-3 h-3" /> Open in New Tab
-                  </a>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {showboxLinks.map((link, idx) => (
-                <Button
-                  key={link.provider + idx}
-                  size="sm"
-                  variant={selectedProviderIdx === idx ? "default" : "ghost"}
-                  onClick={() => { setSelectedProviderIdx(idx); setIframeKey(prev => prev + 1); }}
-                  className={`font-mono text-xs ${selectedProviderIdx === idx ? "bg-green-600 text-white" : "text-gray-400"}`}
-                  data-testid={`button-provider-${link.provider}`}
-                >
-                  {link.provider}
-                  {link.quality && link.quality !== "Auto" && ` (${link.quality})`}
-                </Button>
-              ))}
-            </div>
-            <p className="text-xs font-mono text-gray-600 mt-2">
-              If the player shows unavailable, try a different provider above or use "Open in New Tab"
-            </p>
-          </div>
-        )}
-
-        <div className="flex flex-col lg:flex-row gap-6 mt-4">
+      <div className="px-4 lg:px-6 py-6 max-w-7xl mx-auto">
+        <div className="flex flex-col lg:flex-row gap-6">
           {coverUrl && (
             <div className="flex-shrink-0 hidden lg:block">
-              <GlassCard hover={false} className="overflow-hidden w-[200px]">
-                <img src={coverUrl} alt={title} className="w-full rounded-[1rem]" data-testid="img-poster" />
-              </GlassCard>
+              <img src={coverUrl} alt={title} className="w-[180px] rounded-xl" data-testid="img-poster" />
             </div>
           )}
 
           <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-display font-bold text-white mb-2">{title}</h2>
             <div className="flex flex-wrap items-center gap-3 mb-3">
               {rating && (
                 <span className="flex items-center gap-1 text-sm font-mono text-green-400" data-testid="text-rating">
@@ -393,7 +382,7 @@ export default function Watch() {
 
             {genres.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-3">
-                {genres.map((g) => (
+                {genres.map((g: string) => (
                   <Badge key={g} variant="outline" className="text-green-300 border-green-500/15 bg-green-500/10 font-mono" data-testid={`badge-genre-${g}`}>
                     {g}
                   </Badge>
@@ -410,7 +399,7 @@ export default function Watch() {
             {cast.length > 0 && (
               <div className="mb-4">
                 <span className="text-xs font-mono text-gray-500">Cast: </span>
-                <span className="text-xs text-gray-400">{cast.slice(0, 6).map(c => c.name).join(", ")}</span>
+                <span className="text-xs text-gray-400">{cast.slice(0, 6).map((c: any) => c.name).join(", ")}</span>
               </div>
             )}
           </div>
@@ -421,8 +410,8 @@ export default function Watch() {
             <h2 className="text-lg font-display font-bold text-white mb-4" data-testid="text-recommendations-heading">
               You might also like
             </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {recommendedItems.slice(0, 12).map((item: any) => (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+              {recommendedItems.slice(0, 16).map((item: any) => (
                 <ContentCard key={item.subjectId} item={item} />
               ))}
             </div>

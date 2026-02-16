@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Film, Tv, Search, Clapperboard } from "lucide-react";
+import { Film, Tv, Search, Clapperboard, Music } from "lucide-react";
 import wolflixLogo from "@assets/wolflix-logo.png";
 import {
   Sidebar,
@@ -19,6 +19,7 @@ const mainMenu = [
   { title: "Home", url: "/", icon: Clapperboard },
   { title: "Movies", url: "/movies", icon: Film },
   { title: "TV Shows", url: "/tv-shows", icon: Tv },
+  { title: "Music", url: "/music", icon: Music },
 ];
 
 const secondaryMenu = [

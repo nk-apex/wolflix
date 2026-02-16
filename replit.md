@@ -4,6 +4,12 @@
 WOLFLIX is a streaming platform built with React + Vite on the frontend and Express on the backend. It uses the movieapi.xcasper.space API as the data source for movie/TV metadata. Streaming is handled via ShowBox embed players (VidSrc, VidSrc.me, MultiEmbed, AutoEmbed, NontonGo). The app features a dark theme with neon green (#00ff00) accents and glass-morphism card effects.
 
 ## Recent Changes
+- **Feb 16, 2026**: Music page, grid layouts, fullscreen watch page
+  - Added Music page (`/music`) with YouTube MP3/MP4 playback via xwolf APIs
+  - Backend proxy routes for xwolf music APIs (`/api/wolflix/music/mp3`, `/api/wolflix/music/mp4`, `/api/wolflix/music/download`)
+  - Converted homepage, movies, TV shows pages from horizontal scroll rows to vertical grid layout (ContentGrid)
+  - Watch page redesigned to edge-to-edge fullscreen with player filling viewport height
+  - Music page features: URL input, MP3/MP4 format toggle, audio/video player, track list, download links
 - **Feb 16, 2026**: ShowBox embed player integration & detail page improvements
   - Switched from direct MP4 URLs to ShowBox embed players (XCASPER API's /play URLs are IP-locked)
   - Added ShowBox resolve endpoint (`/api/wolflix/showbox/resolve`) that searches ShowBox API for IMDB IDs
@@ -43,6 +49,9 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `rich-detail?detailPath=` - Detailed content info with cast, seasons
 - `showbox/resolve?title=&type=` - Resolve ShowBox embed links by title
 - `player?url=` - Serve HTML page with embedded player iframe
+- `music/mp3?url=` - Convert YouTube URL to MP3 stream via xwolf API
+- `music/mp4?url=` - Convert YouTube URL to MP4 stream via xwolf API
+- `music/download?url=` - Get direct download link via xwolf API
 
 ## Pages
 - `/` - Welcome (hero carousel, stats, trending/hot content rows)
@@ -51,6 +60,7 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `/search` - Search with popular search suggestions
 - `/detail/:type/:id` - Detail page with metadata, description, cast, recommendations, "Watch Now" button
 - `/watch/:type/:id` - Watch page with ShowBox embed player, provider switching, season/episode selection (TV)
+- `/music` - Music page with YouTube URL input, MP3/MP4 format toggle, audio/video player, track list, download links
 
 ## Key Components
 - `GlassCard` / `GlassPanel` - Glass-morphism card components
