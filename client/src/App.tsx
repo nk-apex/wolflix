@@ -13,6 +13,7 @@ import Movies from "@/pages/movies";
 import TVShows from "@/pages/tv-shows";
 import SearchPage from "@/pages/search";
 import Watch from "@/pages/watch";
+import Detail from "@/pages/detail";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/movies" component={Movies} />
       <Route path="/tv-shows" component={TVShows} />
       <Route path="/search" component={SearchPage} />
+      <Route path="/detail/:type/:id" component={Detail} />
       <Route path="/watch/:type/:id" component={Watch} />
       <Route component={NotFound} />
     </Switch>

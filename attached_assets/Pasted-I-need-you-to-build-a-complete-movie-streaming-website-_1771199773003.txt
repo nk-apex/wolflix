@@ -1,0 +1,44 @@
+I need you to build a complete movie streaming website that uses the XCASPER MOVIES API (https://movieapi.xcasper.space/). The primary goal is a fully functional site where users can search for movies/TV shows and stream them directly. The API requires no key.
+
+Core Requirements & Features:
+
+Technology Stack: Use a modern stack. I prefer Node.js with Express for the backend (to keep API keys secure if ever needed, though not now) and React with Vite for the frontend. Use Tailwind CSS for styling to make it look modern and responsive.
+
+API Integration & Key Pages:
+
+Homepage: Fetch and display Trending content using GET /api/trending. Create attractive cards for each item showing title, type (movie/tv), and poster/thumbnail if available. Include a navigation bar with a search bar.
+
+Search Page: Implement search functionality using GET /api/search?keyword=.... Display results in the same card format. Handle pagination if the API supports it (check the response).
+
+Details Page: When a user clicks a movie/TV card, navigate to a dynamic route (e.g., /details/:id?type=movie). Fetch and display rich metadata from GET /api/detail. Show the title, description, cast, etc.
+
+Streaming is the TOP Priority: On the details page, prominently feature a "Watch Now" or "Play" button.
+
+Implementing Streaming (Crucial Part):
+This is the most important part. The API provides two main paths for streaming. The site must handle both intelligently.
+
+Primary Method (ShowBox Stream):
+
+When a user clicks "Play" on a movie from the search or details page, your backend should first use the title to get a ShowBox ID: GET /api/showbox/search?keyword=MOVIE_TITLE&type=movie.
+Extract the id from the search results.
+Use that id to get the final stream: GET /api/stream?id=SHOWBOX_ID&type=movie. For TV shows, you'll need to prompt the user for season/episode or get it from the details page and call GET /api/stream?id=SHOWBOX_ID&type=tv&season=N&episode=M.
+Fallback Method (Direct Downloads/NewToxic):
+
+If the ShowBox stream fails or returns nothing, the site should have a fallback.
+Use the NewToxic endpoints to find a downloadable version: Search with GET /api/newtoxic/search?keyword=MOVIE_TITLE.
+From the search results, get a detail URL and fetch GET /api/newtoxic/detail?url=DETAIL_URL.
+The detail response should contain files URLs. You can then use GET /api/newtoxic/resolve?file_url=FILE_URL to get the direct .mp4 for streaming.
+Video Player: Integrate a robust HTML5 video player (like Video.js or Plyr) on the frontend. Create a player page that receives the final stream URL (from either method) and plays it.
+
+Error Handling & User Feedback:
+
+The site must handle cases where a stream link is not found.
+
+Show clear loading states (spinners) when fetching data.
+
+Display user-friendly error messages if a search fails or a movie can't be streamed.
+
+Deployment: Ensure the app is configured for easy deployment on Replit. The final app should be accessible via the Replit URL.
+
+Your Task:
+Generate the complete code for this project. Start by setting up the project structure, then implement the backend API routes to act as a proxy to the XCASPER API (this keeps frontend calls simple and avoids CORS issues directly from the browser). Then, build the React frontend with the pages and components described above, ensuring the streaming logic is robust and well-tested. Provide clear instructions in the README on how to run the app.
