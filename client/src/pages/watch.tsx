@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation, useSearch } from "wouter";
-import { ArrowLeft, Star, Clock, Loader2, Play, Film, Tv, ChevronDown, AlertTriangle, RefreshCw, Monitor, Layers } from "lucide-react";
+import { ArrowLeft, Star, Clock, Loader2, Play, Film, Tv, ChevronDown, AlertTriangle, RefreshCw, Monitor, Layers, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
@@ -121,7 +121,7 @@ export default function Watch() {
   const [activeSource, setActiveSource] = useState<StreamSource>("showbox");
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState(1);
-  const [showProviders, setShowProviders] = useState(false);
+  const [showProviders, setShowProviders] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const { data: richDetail, isLoading: detailLoading } = useQuery<RichDetailResponse>({
@@ -344,7 +344,7 @@ export default function Watch() {
               </div>
             </div>
           ) : activeSource === "showbox" && selectedProvider ? (
-            <div className="relative w-full aspect-video bg-black">
+            <div className="relative w-full aspect-video bg-black group">
               <iframe
                 key={selectedProvider.url}
                 src={selectedProvider.url}
@@ -354,6 +354,17 @@ export default function Watch() {
                 referrerPolicy="origin"
                 data-testid="iframe-player"
               />
+              <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                <a
+                  href={selectedProvider.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 bg-black/80 backdrop-blur-sm text-green-400 text-xs font-mono px-3 py-1.5 rounded-lg border border-green-500/30"
+                  data-testid="link-open-new-tab"
+                >
+                  <ExternalLink className="w-3 h-3" /> Open Player
+                </a>
+              </div>
             </div>
           ) : activeSource === "native" && selectedStream ? (
             <div className="relative w-full aspect-video bg-black">
@@ -437,31 +448,55 @@ export default function Watch() {
           )}
         </GlassPanel>
 
-        {activeSource === "showbox" && showboxLinks.length > 1 && (
+        {activeSource === "showbox" && showboxLinks.length > 0 && (
           <div className="mb-4">
-            <button
-              onClick={() => setShowProviders(!showProviders)}
-              className="flex items-center gap-2 text-xs font-mono text-gray-500 mb-2"
-              data-testid="button-toggle-providers"
-            >
-              <Monitor className="w-3 h-3" />
-              {showProviders ? "Hide" : "Show"} providers ({showboxLinks.length})
-              <ChevronDown className={`w-3 h-3 transition-transform ${showProviders ? "rotate-180" : ""}`} />
-            </button>
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => setShowProviders(!showProviders)}
+                className="flex items-center gap-2 text-xs font-mono text-gray-500"
+                data-testid="button-toggle-providers"
+              >
+                <Monitor className="w-3 h-3" />
+                {showProviders ? "Hide" : "Show"} providers ({showboxLinks.length})
+                <ChevronDown className={`w-3 h-3 transition-transform ${showProviders ? "rotate-180" : ""}`} />
+              </button>
+              {selectedProvider && (
+                <a
+                  href={selectedProvider.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-mono text-green-400 hover:text-green-300"
+                  data-testid="link-open-current-provider"
+                >
+                  <ExternalLink className="w-3 h-3" /> Open in New Tab
+                </a>
+              )}
+            </div>
             {showProviders && (
               <div className="flex flex-wrap gap-2">
                 {showboxLinks.map((link, idx) => (
-                  <Button
-                    key={link.provider + idx}
-                    size="sm"
-                    variant={selectedProviderIdx === idx ? "default" : "ghost"}
-                    onClick={() => setSelectedProviderIdx(idx)}
-                    className={`font-mono text-xs ${selectedProviderIdx === idx ? "bg-green-600 text-white" : "text-gray-400"}`}
-                    data-testid={`button-provider-${link.provider}`}
-                  >
-                    {link.provider}
-                    {link.quality && link.quality !== "Auto" && ` (${link.quality})`}
-                  </Button>
+                  <div key={link.provider + idx} className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant={selectedProviderIdx === idx ? "default" : "ghost"}
+                      onClick={() => setSelectedProviderIdx(idx)}
+                      className={`font-mono text-xs ${selectedProviderIdx === idx ? "bg-green-600 text-white" : "text-gray-400"}`}
+                      data-testid={`button-provider-${link.provider}`}
+                    >
+                      {link.provider}
+                      {link.quality && link.quality !== "Auto" && ` (${link.quality})`}
+                    </Button>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-500 hover:text-green-400 p-1"
+                      title={`Open ${link.provider} in new tab`}
+                      data-testid={`link-provider-newtab-${link.provider}`}
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
                 ))}
               </div>
             )}
