@@ -366,5 +366,49 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/wolflix/player", (req, res) => {
+    const url = req.query.url as string;
+    if (!url) return res.status(400).send("Missing url parameter");
+
+    const allowedDomains = [
+      "vidsrc.xyz", "vidsrc.me", "vidsrc.icu", "vidsrc.pro", "vidsrc.in", "vidsrc.cc", "vidsrc.to", "vidsrc2.to",
+      "multiembed.mov", "autoembed.cc", "player.autoembed.cc",
+      "NontonGo.win", "www.NontonGo.win",
+      "embedsu.com", "embed.su",
+      "2embed.cc", "www.2embed.cc",
+    ];
+
+    try {
+      const parsed = new URL(url);
+      const hostname = parsed.hostname.toLowerCase();
+      const isAllowed = allowedDomains.some(d => hostname === d.toLowerCase() || hostname.endsWith("." + d.toLowerCase()));
+      if (!isAllowed) {
+        return res.status(403).send("Domain not allowed");
+      }
+    } catch {
+      return res.status(400).send("Invalid URL");
+    }
+
+    res.removeHeader("X-Frame-Options");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Content-Security-Policy", "frame-src *; media-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';");
+    res.setHeader("Cache-Control", "no-store");
+
+    const safeUrl = url.replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="origin">
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden;background:#000}iframe{width:100%;height:100%;border:0;position:absolute;top:0;left:0}</style>
+</head>
+<body>
+<iframe src="${safeUrl}" allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture; accelerometer; gyroscope" referrerpolicy="origin"></iframe>
+</body>
+</html>`);
+  });
+
   return httpServer;
 }

@@ -347,22 +347,22 @@ export default function Watch() {
             <div className="relative w-full aspect-video bg-black group">
               <iframe
                 key={selectedProvider.url}
-                src={selectedProvider.url}
+                src={`/api/wolflix/player?url=${encodeURIComponent(selectedProvider.url)}`}
                 className="absolute inset-0 w-full h-full border-0"
                 allowFullScreen
                 allow="autoplay; fullscreen; encrypted-media; picture-in-picture; accelerometer; gyroscope"
-                referrerPolicy="origin"
                 data-testid="iframe-player"
               />
-              <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10" style={{ visibility: "hidden" }}>
                 <a
                   href={selectedProvider.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 bg-black/80 backdrop-blur-sm text-green-400 text-xs font-mono px-3 py-1.5 rounded-lg border border-green-500/30"
                   data-testid="link-open-new-tab"
+                  onMouseEnter={(e) => { (e.currentTarget.parentElement as HTMLElement).style.visibility = "visible"; }}
                 >
-                  <ExternalLink className="w-3 h-3" /> Open Player
+                  <ExternalLink className="w-3 h-3" /> Open Direct
                 </a>
               </div>
             </div>
