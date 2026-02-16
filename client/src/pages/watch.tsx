@@ -106,7 +106,10 @@ export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
   const [, navigate] = useLocation();
   const searchString = useSearch();
-  const queryParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const queryParams = useMemo(() => {
+    const raw = searchString || window.location.search.replace(/^\?/, "");
+    return new URLSearchParams(raw);
+  }, [searchString]);
   const type = params?.type || "movie";
   const subjectId = params?.id || "";
 
@@ -347,9 +350,8 @@ export default function Watch() {
                 src={selectedProvider.url}
                 className="absolute inset-0 w-full h-full border-0"
                 allowFullScreen
-                allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                referrerPolicy="no-referrer"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-popups-to-escape-sandbox"
+                allow="autoplay; fullscreen; encrypted-media; picture-in-picture; accelerometer; gyroscope"
+                referrerPolicy="origin"
                 data-testid="iframe-player"
               />
             </div>

@@ -304,7 +304,14 @@ export async function registerRoutes(
       }
 
       const streamData = await apiFetch(streamPath, 30000);
-      const links = streamData?.data?.links || [];
+      const rawLinks = streamData?.data?.links || [];
+
+      const links = rawLinks.map((link: any) => ({
+        ...link,
+        url: link.url
+          ? link.url.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+          : link.url,
+      }));
 
       res.json({
         success: true,
