@@ -55,12 +55,17 @@ export default function Detail() {
   const [, params] = useRoute("/detail/:type/:id");
   const [, navigate] = useLocation();
   const searchString = useSearch();
-  const queryParams = useMemo(() => new URLSearchParams(searchString), [searchString]);
   const type = params?.type || "movie";
   const subjectId = params?.id || "";
 
-  const titleFromUrl = queryParams.get("title") || "";
-  const detailPathFromUrl = queryParams.get("detailPath") || "";
+  const { titleFromUrl, detailPathFromUrl } = useMemo(() => {
+    const raw = searchString || "";
+    const fromWouter = new URLSearchParams(raw.startsWith("?") ? raw : "?" + raw);
+    const fromWindow = new URLSearchParams(window.location.search);
+    const title = fromWouter.get("title") || fromWindow.get("title") || "";
+    const detailPath = fromWouter.get("detailPath") || fromWindow.get("detailPath") || "";
+    return { titleFromUrl: title, detailPathFromUrl: detailPath };
+  }, [searchString]);
 
   const { data: richDetail, isLoading: detailLoading } = useQuery<RichDetailResponse>({
     queryKey: ["/api/wolflix/rich-detail", detailPathFromUrl],
@@ -92,8 +97,9 @@ export default function Detail() {
     },
   });
 
-  const detail = richDetail?.data || basicDetail?.data;
-  const title = detail?.title || titleFromUrl;
+  const basicSubject = basicDetail?.data?.subject || basicDetail?.data;
+  const detail = richDetail?.data || basicSubject;
+  const title = detail?.title?.replace(/\[.*?\]/g, "").trim() || titleFromUrl;
   const coverUrl = detail?.cover?.url || "";
   const rating = detail?.imdbRatingValue || "";
   const genres = (detail?.genre || "").split(",").map(g => g.trim()).filter(Boolean);

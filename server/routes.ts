@@ -217,6 +217,7 @@ export async function registerRoutes(
       if (ep) path += `&ep=${ep}`;
       if (season) path += `&season=${season}`;
       const data = await apiFetch(path);
+      res.setHeader("Cache-Control", "no-store");
       res.json(data);
     } catch (e: any) {
       res.status(502).json({ success: false, error: e.message });
@@ -372,10 +373,13 @@ export async function registerRoutes(
 
     const allowedDomains = [
       "vidsrc.xyz", "vidsrc.me", "vidsrc.icu", "vidsrc.pro", "vidsrc.in", "vidsrc.cc", "vidsrc.to", "vidsrc2.to",
-      "multiembed.mov", "autoembed.cc", "player.autoembed.cc",
+      "vsembed.ru", "vidsrcme.ru",
+      "multiembed.mov", "streamingnow.mov",
+      "autoembed.cc", "player.autoembed.cc", "test.autoembed.cc",
       "NontonGo.win", "www.NontonGo.win",
       "embedsu.com", "embed.su",
       "2embed.cc", "www.2embed.cc",
+      "moviesapi.club", "w1.moviesapi.club",
     ];
 
     try {

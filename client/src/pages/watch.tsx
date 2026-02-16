@@ -1,42 +1,12 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation, useSearch } from "wouter";
-import { ArrowLeft, Star, Clock, Loader2, Play, Film, Tv, ChevronDown, AlertTriangle, RefreshCw, Monitor, Layers, ExternalLink } from "lucide-react";
+import { ArrowLeft, Star, Clock, Loader2, Play, Film, Tv, ChevronDown, AlertTriangle, RefreshCw, Monitor, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GlassCard, GlassPanel } from "@/components/glass-card";
 import { ContentCard } from "@/components/content-card";
 import { type RecommendResponse, getMediaType } from "@/lib/tmdb";
-
-interface PlayStream {
-  format: string;
-  id: string;
-  url: string;
-  resolutions: string;
-  size: string;
-  duration: number;
-  codecName: string;
-}
-
-interface PlaySubtitle {
-  language: string;
-  languageCode: string;
-  url: string;
-}
-
-interface PlayResponse {
-  code: number;
-  success: boolean;
-  data: {
-    streams: PlayStream[];
-    subtitles: PlaySubtitle[];
-    hasResource: boolean;
-    title?: string;
-    genre?: string;
-    imdbRating?: string;
-    cover?: string;
-  };
-}
 
 interface ShowBoxLink {
   provider: string;
@@ -84,14 +54,6 @@ interface RichDetailResponse {
   };
 }
 
-function formatFileSize(bytes: string): string {
-  const b = parseInt(bytes, 10);
-  if (isNaN(b)) return "";
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
-  if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(0)} MB`;
-  return `${(b / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
-
 function formatDuration(seconds: number): string {
   if (!seconds) return "";
   const h = Math.floor(seconds / 3600);
@@ -100,31 +62,28 @@ function formatDuration(seconds: number): string {
   return `${m}m`;
 }
 
-type StreamSource = "showbox" | "native" | "none";
-
 export default function Watch() {
   const [, params] = useRoute("/watch/:type/:id");
   const [, navigate] = useLocation();
   const searchString = useSearch();
-  const queryParams = useMemo(() => {
-    const raw = searchString || window.location.search.replace(/^\?/, "");
-    return new URLSearchParams(raw);
-  }, [searchString]);
   const type = params?.type || "movie";
   const subjectId = params?.id || "";
 
-  const titleFromUrl = queryParams.get("title") || "";
-  const detailPathFromUrl = queryParams.get("detailPath") || "";
+  const { titleFromUrl, detailPathFromUrl } = useMemo(() => {
+    const raw = searchString || "";
+    const fromWouter = new URLSearchParams(raw.startsWith("?") ? raw : "?" + raw);
+    const fromWindow = new URLSearchParams(window.location.search);
+    const title = fromWouter.get("title") || fromWindow.get("title") || "";
+    const detailPath = fromWouter.get("detailPath") || fromWindow.get("detailPath") || "";
+    return { titleFromUrl: title, detailPathFromUrl: detailPath };
+  }, [searchString]);
 
-  const [selectedStreamIdx, setSelectedStreamIdx] = useState(0);
   const [selectedProviderIdx, setSelectedProviderIdx] = useState(0);
-  const [activeSource, setActiveSource] = useState<StreamSource>("showbox");
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState(1);
-  const [showProviders, setShowProviders] = useState(true);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [iframeKey, setIframeKey] = useState(0);
 
-  const { data: richDetail, isLoading: detailLoading } = useQuery<RichDetailResponse>({
+  const { data: richDetail } = useQuery<RichDetailResponse>({
     queryKey: ["/api/wolflix/rich-detail", detailPathFromUrl],
     enabled: !!detailPathFromUrl,
     queryFn: async () => {
@@ -134,48 +93,37 @@ export default function Watch() {
     },
   });
 
-  const { data: showboxData, isLoading: showboxLoading, error: showboxError, isFetched: showboxFetched } = useQuery<ShowBoxResolveResponse>({
-    queryKey: ["/api/wolflix/showbox/resolve", titleFromUrl, type, selectedSeason, selectedEpisode],
-    enabled: !!titleFromUrl,
+  const { data: basicDetail } = useQuery<any>({
+    queryKey: ["/api/wolflix/detail", subjectId],
+    enabled: !!subjectId && !titleFromUrl && !detailPathFromUrl,
     queryFn: async () => {
-      let url = `/api/wolflix/showbox/resolve?title=${encodeURIComponent(titleFromUrl)}&type=${type}`;
+      const res = await fetch(`/api/wolflix/detail?subjectId=${subjectId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  const basicSubject = basicDetail?.data?.subject || basicDetail?.data || {};
+  const detail = richDetail?.data || basicSubject;
+  const resolvedTitle = titleFromUrl || detail?.title?.replace(/\[.*?\]/g, "").trim() || "";
+
+  const { data: showboxData, isLoading: showboxLoading, error: showboxError, isFetched: showboxFetched } = useQuery<ShowBoxResolveResponse>({
+    queryKey: ["/api/wolflix/showbox/resolve", resolvedTitle, type, selectedSeason, selectedEpisode],
+    enabled: !!resolvedTitle,
+    queryFn: async () => {
+      let url = `/api/wolflix/showbox/resolve?title=${encodeURIComponent(resolvedTitle)}&type=${type}`;
       if (type === "tv") {
         url += `&season=${selectedSeason}&episode=${selectedEpisode}`;
       }
       const res = await fetch(url);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "ShowBox lookup failed");
+        throw new Error(errData.error || "Stream lookup failed");
       }
       return res.json();
     },
     retry: 1,
     retryDelay: 2000,
-  });
-
-  const playUrl = useMemo(() => {
-    let url = `/api/wolflix/play?subjectId=${subjectId}`;
-    if (detailPathFromUrl) url += `&detailPath=${encodeURIComponent(detailPathFromUrl)}`;
-    if (titleFromUrl) url += `&title=${encodeURIComponent(titleFromUrl)}`;
-    if (type === "tv") {
-      url += `&season=${selectedSeason}&ep=${selectedEpisode}`;
-    }
-    return url;
-  }, [subjectId, detailPathFromUrl, titleFromUrl, type, selectedSeason, selectedEpisode]);
-
-  const { data: playData, isLoading: playLoading, error: playError } = useQuery<PlayResponse>({
-    queryKey: ["/api/wolflix/play", subjectId, detailPathFromUrl, titleFromUrl, selectedSeason, selectedEpisode],
-    enabled: !!subjectId && activeSource === "native",
-    queryFn: async () => {
-      const res = await fetch(playUrl);
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to load streams");
-      }
-      return res.json();
-    },
-    retry: 2,
-    retryDelay: 1000,
   });
 
   const { data: recommendations } = useQuery<RecommendResponse>({
@@ -189,48 +137,23 @@ export default function Watch() {
   });
 
   const showboxLinks = showboxData?.links || [];
-  const streams = playData?.data?.streams || [];
-  const subtitles = playData?.data?.subtitles || [];
   const recommendedItems = recommendations?.data?.items || [];
 
-  const detail = richDetail?.data;
-  const title = titleFromUrl || detail?.title || playData?.data?.title || "";
-  const coverUrl = detail?.cover?.url || playData?.data?.cover || "";
-  const rating = detail?.imdbRatingValue || playData?.data?.imdbRating || "";
-  const genres = (detail?.genre || playData?.data?.genre || "").split(",").map(g => g.trim()).filter(Boolean);
+  const title = resolvedTitle;
+  const coverUrl = detail?.cover?.url || "";
+  const rating = detail?.imdbRatingValue || "";
+  const genres = (detail?.genre || "").split(",").map(g => g.trim()).filter(Boolean);
   const description = detail?.description || "";
   const cast = detail?.staffList || [];
   const seasons = detail?.seasons || [];
   const episodeList = detail?.episodeList || [];
 
-  const sortedStreams = useMemo(() => {
-    return [...streams].sort((a, b) => parseInt(b.resolutions) - parseInt(a.resolutions));
-  }, [streams]);
-
-  const selectedStream = sortedStreams[selectedStreamIdx];
   const selectedProvider = showboxLinks[selectedProviderIdx];
 
   useEffect(() => {
-    setSelectedStreamIdx(0);
     setSelectedProviderIdx(0);
-    setActiveSource("showbox");
+    setIframeKey(0);
   }, [subjectId]);
-
-  useEffect(() => {
-    if (showboxFetched && !showboxLoading && showboxLinks.length === 0) {
-      setActiveSource("native");
-    }
-  }, [showboxFetched, showboxLoading, showboxLinks.length]);
-
-  const switchToNative = useCallback(() => {
-    setActiveSource("native");
-  }, []);
-
-  const switchToShowbox = useCallback(() => {
-    if (showboxLinks.length > 0) {
-      setActiveSource("showbox");
-    }
-  }, [showboxLinks.length]);
 
   const isTV = type === "tv";
   const availableSeasons = seasons.length > 0
@@ -242,8 +165,16 @@ export default function Watch() {
   const currentSeasonEpisodes = seasons.find(s => s.seasonNumber === selectedSeason)?.episodes
     || (selectedSeason === 1 ? episodeList : []);
 
-  const isLoading = activeSource === "showbox" ? showboxLoading : playLoading;
-  const hasError = activeSource === "showbox" ? !!showboxError : !!playError;
+  const retryProvider = useCallback(() => {
+    setIframeKey(prev => prev + 1);
+  }, []);
+
+  const tryNextProvider = useCallback(() => {
+    if (showboxLinks.length > 1) {
+      setSelectedProviderIdx(prev => (prev + 1) % showboxLinks.length);
+      setIframeKey(prev => prev + 1);
+    }
+  }, [showboxLinks.length]);
 
   return (
     <div className="min-h-screen bg-black">
@@ -260,35 +191,13 @@ export default function Watch() {
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <h1 className="text-lg lg:text-xl font-display font-bold text-white truncate" data-testid="text-watch-title">
-              {title || (isLoading ? "Loading..." : "Untitled")}
+              {title || ((showboxLoading || !resolvedTitle) ? "Loading..." : "Untitled")}
             </h1>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {showboxLinks.length > 0 && (
-              <div className="flex rounded-lg overflow-hidden border border-green-500/20">
-                <button
-                  onClick={switchToShowbox}
-                  className={`px-3 py-1.5 text-xs font-mono transition-colors ${activeSource === "showbox" ? "bg-green-500/20 text-green-400" : "text-gray-500"}`}
-                  data-testid="button-source-showbox"
-                >
-                  <Monitor className="w-3 h-3 inline mr-1" />
-                  Embed
-                </button>
-                <button
-                  onClick={switchToNative}
-                  className={`px-3 py-1.5 text-xs font-mono transition-colors ${activeSource === "native" ? "bg-green-500/20 text-green-400" : "text-gray-500"}`}
-                  data-testid="button-source-native"
-                >
-                  <Layers className="w-3 h-3 inline mr-1" />
-                  Direct
-                </button>
-              </div>
-            )}
-            <Badge variant="outline" className="text-green-400 border-green-500/20 font-mono text-xs">
-              {isTV ? <Tv className="w-3 h-3 mr-1" /> : <Film className="w-3 h-3 mr-1" />}
-              {isTV ? "TV Show" : "Movie"}
-            </Badge>
-          </div>
+          <Badge variant="outline" className="text-green-400 border-green-500/20 font-mono text-xs flex-shrink-0">
+            {isTV ? <Tv className="w-3 h-3 mr-1" /> : <Film className="w-3 h-3 mr-1" />}
+            {isTV ? "TV Show" : "Movie"}
+          </Badge>
         </div>
 
         {isTV && (
@@ -334,113 +243,66 @@ export default function Watch() {
         )}
 
         <GlassPanel className="mb-4 p-0 overflow-hidden">
-          {isLoading ? (
+          {(showboxLoading || (!resolvedTitle && !!subjectId)) ? (
             <div className="w-full aspect-video bg-black flex items-center justify-center">
               <div className="text-center">
                 <Loader2 className="w-8 h-8 text-green-500 animate-spin mx-auto mb-3" />
                 <p className="text-sm font-mono text-gray-400">
-                  {activeSource === "showbox" ? "Finding stream sources..." : "Loading stream..."}
+                  {!resolvedTitle ? "Loading content info..." : "Finding stream sources..."}
+                </p>
+                <p className="text-xs font-mono text-gray-600 mt-1">
+                  This may take 10-15 seconds
                 </p>
               </div>
             </div>
-          ) : activeSource === "showbox" && selectedProvider ? (
-            <div className="relative w-full aspect-video bg-black group">
+          ) : selectedProvider ? (
+            <div className="relative w-full aspect-video bg-black">
               <iframe
-                key={selectedProvider.url}
+                key={`${selectedProvider.url}-${iframeKey}`}
                 src={`/api/wolflix/player?url=${encodeURIComponent(selectedProvider.url)}`}
                 className="absolute inset-0 w-full h-full border-0"
                 allowFullScreen
                 allow="autoplay; fullscreen; encrypted-media; picture-in-picture; accelerometer; gyroscope"
                 data-testid="iframe-player"
               />
-              <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10" style={{ visibility: "hidden" }}>
-                <a
-                  href={selectedProvider.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 bg-black/80 backdrop-blur-sm text-green-400 text-xs font-mono px-3 py-1.5 rounded-lg border border-green-500/30"
-                  data-testid="link-open-new-tab"
-                  onMouseEnter={(e) => { (e.currentTarget.parentElement as HTMLElement).style.visibility = "visible"; }}
-                >
-                  <ExternalLink className="w-3 h-3" /> Open Direct
-                </a>
-              </div>
-            </div>
-          ) : activeSource === "native" && selectedStream ? (
-            <div className="relative w-full aspect-video bg-black">
-              <video
-                ref={videoRef}
-                key={selectedStream.id}
-                src={selectedStream.url}
-                controls
-                autoPlay
-                playsInline
-                className="absolute inset-0 w-full h-full"
-                data-testid="video-player"
-              >
-                {subtitles.map((sub) => (
-                  <track
-                    key={sub.languageCode}
-                    kind="subtitles"
-                    src={sub.url}
-                    srcLang={sub.languageCode}
-                    label={sub.language}
-                  />
-                ))}
-              </video>
             </div>
           ) : (
             <div className="w-full aspect-video bg-black flex items-center justify-center">
               <div className="text-center max-w-md px-6">
-                {hasError ? (
+                {showboxError ? (
                   <>
                     <AlertTriangle className="w-10 h-10 text-red-500/40 mx-auto mb-3" />
                     <p className="text-sm font-mono text-red-400 mb-1" data-testid="text-stream-error">
-                      Stream temporarily unavailable
+                      Could not find stream sources
                     </p>
                     <p className="text-xs font-mono text-gray-500 mb-4">
-                      The streaming source could not be reached. Try switching sources or refreshing.
+                      This title may not be available yet. Try refreshing or come back later.
                     </p>
-                    <div className="flex gap-2 justify-center flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => window.location.reload()}
-                        className="text-green-400 font-mono"
-                        data-testid="button-retry"
-                      >
-                        <RefreshCw className="w-3 h-3 mr-1" /> Retry
-                      </Button>
-                      {activeSource === "showbox" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={switchToNative}
-                          className="text-green-400 font-mono"
-                          data-testid="button-try-native"
-                        >
-                          Try Direct Player
-                        </Button>
-                      )}
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => window.location.reload()}
+                      className="text-green-400 font-mono"
+                      data-testid="button-retry"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                    </Button>
                   </>
                 ) : (
                   <>
                     <Play className="w-10 h-10 text-green-500/20 mx-auto mb-3" />
                     <p className="text-sm font-mono text-gray-500 mb-4" data-testid="text-no-source">
-                      No streaming source available for this title
+                      No streaming source found for this title
                     </p>
-                    {activeSource !== "native" && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={switchToNative}
-                        className="text-green-400 font-mono"
-                        data-testid="button-try-native-fallback"
-                      >
-                        Try Direct Player
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => window.location.reload()}
+                      className="text-green-400 font-mono"
+                      data-testid="button-retry"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" /> Retry
+                    </Button>
                   </>
                 )}
               </div>
@@ -448,77 +310,54 @@ export default function Watch() {
           )}
         </GlassPanel>
 
-        {activeSource === "showbox" && showboxLinks.length > 0 && (
+        {showboxLinks.length > 0 && (
           <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <button
-                onClick={() => setShowProviders(!showProviders)}
-                className="flex items-center gap-2 text-xs font-mono text-gray-500"
-                data-testid="button-toggle-providers"
-              >
+            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+              <div className="flex items-center gap-2 text-xs font-mono text-gray-500">
                 <Monitor className="w-3 h-3" />
-                {showProviders ? "Hide" : "Show"} providers ({showboxLinks.length})
-                <ChevronDown className={`w-3 h-3 transition-transform ${showProviders ? "rotate-180" : ""}`} />
-              </button>
-              {selectedProvider && (
-                <a
-                  href={selectedProvider.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-xs font-mono text-green-400 hover:text-green-300"
-                  data-testid="link-open-current-provider"
-                >
-                  <ExternalLink className="w-3 h-3" /> Open in New Tab
-                </a>
-              )}
-            </div>
-            {showProviders && (
-              <div className="flex flex-wrap gap-2">
-                {showboxLinks.map((link, idx) => (
-                  <div key={link.provider + idx} className="flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant={selectedProviderIdx === idx ? "default" : "ghost"}
-                      onClick={() => setSelectedProviderIdx(idx)}
-                      className={`font-mono text-xs ${selectedProviderIdx === idx ? "bg-green-600 text-white" : "text-gray-400"}`}
-                      data-testid={`button-provider-${link.provider}`}
-                    >
-                      {link.provider}
-                      {link.quality && link.quality !== "Auto" && ` (${link.quality})`}
-                    </Button>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-500 hover:text-green-400 p-1"
-                      title={`Open ${link.provider} in new tab`}
-                      data-testid={`link-provider-newtab-${link.provider}`}
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                ))}
+                <span>Stream providers ({showboxLinks.length})</span>
               </div>
-            )}
-          </div>
-        )}
-
-        {activeSource === "native" && sortedStreams.length > 1 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            <span className="text-xs font-mono text-gray-500 self-center mr-1">Quality:</span>
-            {sortedStreams.map((stream, idx) => (
-              <Button
-                key={stream.id}
-                size="sm"
-                variant={selectedStreamIdx === idx ? "default" : "ghost"}
-                onClick={() => setSelectedStreamIdx(idx)}
-                className={`font-mono text-xs ${selectedStreamIdx === idx ? "bg-green-600 text-white" : "text-gray-400"}`}
-                data-testid={`button-quality-${stream.resolutions}`}
-              >
-                {stream.resolutions}p
-                {stream.size && ` (${formatFileSize(stream.size)})`}
-              </Button>
-            ))}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={retryProvider}
+                  className="text-gray-400 font-mono text-xs"
+                  data-testid="button-reload-player"
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" /> Reload
+                </Button>
+                {selectedProvider && (
+                  <a
+                    href={selectedProvider.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs font-mono text-green-400"
+                    data-testid="link-open-current-provider"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Open in New Tab
+                  </a>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {showboxLinks.map((link, idx) => (
+                <Button
+                  key={link.provider + idx}
+                  size="sm"
+                  variant={selectedProviderIdx === idx ? "default" : "ghost"}
+                  onClick={() => { setSelectedProviderIdx(idx); setIframeKey(prev => prev + 1); }}
+                  className={`font-mono text-xs ${selectedProviderIdx === idx ? "bg-green-600 text-white" : "text-gray-400"}`}
+                  data-testid={`button-provider-${link.provider}`}
+                >
+                  {link.provider}
+                  {link.quality && link.quality !== "Auto" && ` (${link.quality})`}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs font-mono text-gray-600 mt-2">
+              If the player shows unavailable, try a different provider above or use "Open in New Tab"
+            </p>
           </div>
         )}
 
@@ -570,61 +409,8 @@ export default function Watch() {
 
             {cast.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-sm font-mono text-gray-500 mb-2">Cast</h3>
-                <div className="flex flex-wrap gap-2">
-                  {cast.slice(0, 8).map((person) => (
-                    <Badge key={person.name} variant="outline" className="text-gray-400 border-green-500/10 font-mono text-xs">
-                      {person.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeSource === "native" && sortedStreams.length > 0 && (
-              <div className="mt-4">
-                <h3 className="text-sm font-mono text-gray-500 mb-2">Available Streams</h3>
-                <div className="space-y-2">
-                  {sortedStreams.map((stream, idx) => (
-                    <button
-                      key={stream.id}
-                      onClick={() => setSelectedStreamIdx(idx)}
-                      className={`flex items-center justify-between gap-4 p-3 rounded-xl w-full text-left transition-colors ${selectedStreamIdx === idx ? "bg-green-500/15 border border-green-500/30" : "bg-black/40 border border-green-500/10 hover-elevate"}`}
-                      data-testid={`button-stream-${stream.resolutions}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`rounded-lg p-2 ${selectedStreamIdx === idx ? "bg-green-500/20" : "bg-green-500/10"}`}>
-                          <Play className={`w-4 h-4 ${selectedStreamIdx === idx ? "text-green-400" : "text-green-500/50"}`} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-mono text-white font-medium">{stream.resolutions}p {stream.format}</p>
-                          <p className="text-xs font-mono text-gray-500">
-                            {formatFileSize(stream.size)}
-                            {stream.duration > 0 && ` / ${formatDuration(stream.duration)}`}
-                          </p>
-                        </div>
-                      </div>
-                      {selectedStreamIdx === idx && (
-                        <Badge variant="outline" className="text-green-400 border-green-500/30 font-mono text-xs">
-                          Playing
-                        </Badge>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {subtitles.length > 0 && activeSource === "native" && (
-              <div className="mt-4">
-                <h3 className="text-sm font-mono text-gray-500 mb-2">Subtitles ({subtitles.length} languages)</h3>
-                <div className="flex flex-wrap gap-2">
-                  {subtitles.map((sub) => (
-                    <Badge key={sub.languageCode} variant="outline" className="text-gray-400 border-green-500/10 font-mono text-xs">
-                      {sub.language}
-                    </Badge>
-                  ))}
-                </div>
+                <span className="text-xs font-mono text-gray-500">Cast: </span>
+                <span className="text-xs text-gray-400">{cast.slice(0, 6).map(c => c.name).join(", ")}</span>
               </div>
             )}
           </div>
@@ -632,10 +418,12 @@ export default function Watch() {
 
         {recommendedItems.length > 0 && (
           <div className="mt-8 mb-8">
-            <h3 className="text-lg font-display font-bold text-white mb-4">Recommended</h3>
-            <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-              {recommendedItems.slice(0, 12).map((item) => (
-                <ContentCard key={item.subjectId} item={item} type={getMediaType(item.subjectType)} />
+            <h2 className="text-lg font-display font-bold text-white mb-4" data-testid="text-recommendations-heading">
+              You might also like
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {recommendedItems.slice(0, 12).map((item: any) => (
+                <ContentCard key={item.subjectId} item={item} />
               ))}
             </div>
           </div>
