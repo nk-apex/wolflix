@@ -1,22 +1,25 @@
 # WOLFLIX - Streaming Platform
 
 ## Overview
-WOLFLIX is a streaming platform built with React + Vite on the frontend and Express on the backend. It uses the movieapi.xcasper.space API as the data source for movie/TV metadata and direct MP4 streaming URLs. The app features a dark theme with neon green (#00ff00) accents and glass-morphism card effects.
+WOLFLIX is a streaming platform built with React + Vite on the frontend and Express on the backend. It uses the movieapi.xcasper.space API as the data source for movie/TV metadata. Streaming is handled via ShowBox embed players (VidSrc, VidSrc.me, MultiEmbed, AutoEmbed, NontonGo). The app features a dark theme with neon green (#00ff00) accents and glass-morphism card effects.
 
 ## Recent Changes
+- **Feb 16, 2026**: ShowBox embed player integration & detail page improvements
+  - Switched from direct MP4 URLs to ShowBox embed players (XCASPER API's /play URLs are IP-locked)
+  - Added ShowBox resolve endpoint (`/api/wolflix/showbox/resolve`) that searches ShowBox API for IMDB IDs
+  - Added player proxy endpoint (`/api/wolflix/player`) serving HTML pages with embed iframes
+  - Added detail page (`/detail/:type/:id`) with rich metadata, hero backdrop, cast, recommendations
+  - Fixed API response structure: detail endpoint returns data in `data.subject` not `data`
+  - Added title cleanup: strips [CAM] and other bracketed tags before ShowBox search
+  - URL parameter resilience: fallback to detail API when query params missing on direct navigation
+  - TV show season/episode selection with dynamic ShowBox resolve per episode
 - **Feb 15, 2026**: Migrated from IMDB API to movieapi.xcasper.space API
-  - Replaced all API endpoints (trending, hot, search, play, recommend, homepage, popular-search, rich-detail)
-  - Updated data model to use SubjectItem with subjectType (1=movie, 2=TV)
-  - Streaming now uses direct MP4 URLs with multiple quality options and SRT subtitles
-  - Removed unused pages (Series, Animation, Music, Sport, Novel, Most Viewed, Application, Settings, Profile)
-  - Added detailPath parameter to play and rich-detail endpoints
-  - Added User-Agent header to API proxy (required by external API)
 
 ## Architecture
 - **Frontend**: React + TypeScript + Vite, TailwindCSS, Shadcn UI
 - **Backend**: Express.js proxying movieapi.xcasper.space API requests with caching
-- **Streaming**: Direct MP4 URLs from API with HTML5 video player, multiple quality options (360p/480p/1080p)
-- **Subtitles**: SRT format served from API, loaded as video tracks
+- **Streaming**: ShowBox embed players via iframe (VidSrc, VidSrc.me, MultiEmbed, AutoEmbed, NontonGo)
+- **Player Proxy**: `/api/wolflix/player` serves HTML pages embedding provider iframes, bypassing iframe restrictions
 - **Styling**: Dark mode with neon green accents, glass card effects, font-display (Oxanium), font-mono
 - **Routing**: wouter for client-side routing
 - **Data Fetching**: @tanstack/react-query
@@ -27,6 +30,7 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `subjectType`: 1 = Movie, 2 = TV Show
 - `detailPath`: URL slug needed for play and rich-detail endpoints
 - API requires User-Agent header for successful requests
+- Detail endpoint returns data nested in `data.subject` (not directly in `data`)
 
 ### Server Proxy Routes (`/api/wolflix/`)
 - `trending` - Trending content list
@@ -35,15 +39,18 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `search?keyword=` - Search by keyword
 - `popular-search` - Popular search terms
 - `recommend?subjectId=` - Recommended content
-- `rich-detail?detailPath=` - Detailed content info
-- `play?subjectId=&detailPath=` - Get streaming URLs (MP4), subtitles, optional ep/season params
+- `detail?subjectId=` - Basic content info (returns data.subject)
+- `rich-detail?detailPath=` - Detailed content info with cast, seasons
+- `showbox/resolve?title=&type=` - Resolve ShowBox embed links by title
+- `player?url=` - Serve HTML page with embedded player iframe
 
 ## Pages
 - `/` - Welcome (hero carousel, stats, trending/hot content rows)
 - `/movies` - Movies by category (hot, trending, genre-grouped)
 - `/tv-shows` - TV Shows by category (hot, trending, genre-grouped)
 - `/search` - Search with popular search suggestions
-- `/watch/:type/:id` - Watch page with HTML5 video player, quality selection, subtitles, download links, recommendations
+- `/detail/:type/:id` - Detail page with metadata, description, cast, recommendations, "Watch Now" button
+- `/watch/:type/:id` - Watch page with ShowBox embed player, provider switching, season/episode selection (TV)
 
 ## Key Components
 - `GlassCard` / `GlassPanel` - Glass-morphism card components
@@ -55,6 +62,14 @@ WOLFLIX is a streaming platform built with React + Vite on the frontend and Expr
 - `SubjectItem` - Core content item (subjectId, subjectType, title, cover, genre, imdbRatingValue, detailPath, etc.)
 - `BannerItem` - Homepage banner with subject reference
 - Helper functions: getMediaType, getRating, getYear, getPosterUrl, getGenres
+
+## Streaming Flow
+1. User clicks content → navigates to `/watch/:type/:id` with query params (title, detailPath)
+2. If no query params (direct URL), watch page fetches title from `/api/wolflix/detail?subjectId=`
+3. Title is cleaned (strips [CAM] etc.) and sent to `/api/wolflix/showbox/resolve`
+4. ShowBox resolve returns embed links from multiple providers
+5. First provider URL is loaded via `/api/wolflix/player?url=` (server-side HTML proxy)
+6. User can switch providers, reload player, or open in new tab as fallback
 
 ## Caching
 - Server-side in-memory cache with 5-minute TTL
