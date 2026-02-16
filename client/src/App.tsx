@@ -15,6 +15,7 @@ import SearchPage from "@/pages/search";
 import Watch from "@/pages/watch";
 import Detail from "@/pages/detail";
 import MusicPage from "@/pages/music";
+import MusicPlay from "@/pages/music-play";
 
 function Router() {
   return (
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/detail/:type/:id" component={Detail} />
       <Route path="/watch/:type/:id" component={Watch} />
       <Route path="/music" component={MusicPage} />
+      <Route path="/music/play/:id" component={MusicPlay} />
       <Route component={NotFound} />
     </Switch>
   );

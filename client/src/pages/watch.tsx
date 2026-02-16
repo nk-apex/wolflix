@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation, useSearch } from "wouter";
-import { ArrowLeft, Star, Clock, Loader2, Play, Film, Tv, ChevronDown, AlertTriangle, RefreshCw, Monitor, ExternalLink } from "lucide-react";
+import { ArrowLeft, Star, Clock, Loader2, Play, Film, Tv, ChevronDown, AlertTriangle, RefreshCw, ExternalLink, SkipBack, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ContentCard } from "@/components/content-card";
@@ -81,6 +81,8 @@ export default function Watch() {
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState(1);
   const [iframeKey, setIframeKey] = useState(0);
+  const [showControls, setShowControls] = useState(false);
+  const controlsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: richDetail } = useQuery<RichDetailResponse>({
     queryKey: ["/api/wolflix/rich-detail", detailPathFromUrl],
@@ -175,15 +177,38 @@ export default function Watch() {
     }
   }, [showboxLinks.length]);
 
+  const tryPrevProvider = useCallback(() => {
+    if (showboxLinks.length > 1) {
+      setSelectedProviderIdx(prev => (prev - 1 + showboxLinks.length) % showboxLinks.length);
+      setIframeKey(prev => prev + 1);
+    }
+  }, [showboxLinks.length]);
+
+  const handlePlayerMouseMove = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
+    controlsTimeout.current = setTimeout(() => setShowControls(false), 3000);
+  }, []);
+
+  const handlePlayerMouseLeave = useCallback(() => {
+    if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
+    setShowControls(false);
+  }, []);
+
   return (
     <div className="min-h-screen bg-black">
-      <div className="relative w-full" style={{ height: "calc(100vh - 49px)" }}>
+      <div
+        className="relative w-full"
+        style={{ height: "calc(100vh - 49px)" }}
+        onMouseMove={handlePlayerMouseMove}
+        onMouseLeave={handlePlayerMouseLeave}
+      >
         <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-3 py-2 bg-gradient-to-b from-black/80 to-transparent gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate(-1)}
+              onClick={() => window.history.back()}
               className="text-white/80 flex-shrink-0"
               data-testid="button-back"
             >
@@ -270,8 +295,65 @@ export default function Watch() {
           </div>
         )}
 
+        {selectedProvider && (
+          <div
+            className={`absolute inset-0 z-10 flex items-center justify-center pointer-events-none transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0"}`}
+          >
+            <div className="flex items-center gap-4 pointer-events-auto">
+              {showboxLinks.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={tryPrevProvider}
+                  className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-white/80"
+                  data-testid="button-hover-prev"
+                >
+                  <SkipBack className="w-5 h-5" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={retryProvider}
+                className="w-16 h-16 rounded-full bg-green-500/80 backdrop-blur-sm text-black"
+                data-testid="button-hover-reload"
+              >
+                <RefreshCw className="w-7 h-7" />
+              </Button>
+              {showboxLinks.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={tryNextProvider}
+                  className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-white/80"
+                  data-testid="button-hover-next"
+                >
+                  <SkipForward className="w-5 h-5" />
+                </Button>
+              )}
+            </div>
+            {selectedProvider && (
+              <a
+                href={selectedProvider.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute bottom-16 right-4 pointer-events-auto"
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-white/80"
+                  data-testid="button-hover-external"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </Button>
+              </a>
+            )}
+          </div>
+        )}
+
         {showboxLinks.length > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-3 py-3">
+          <div className={`absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-3 py-3 transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0 hover:opacity-100"}`}>
             <div className="flex items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
               {showboxLinks.map((link: ShowBoxLink, idx: number) => (
                 <button

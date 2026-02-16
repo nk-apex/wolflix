@@ -472,5 +472,26 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/wolflix/music/search", async (req, res) => {
+    const q = req.query.q as string;
+    if (!q) return res.status(400).json({ success: false, error: "Search query required" });
+
+    const cacheKey = `music-search-${q}`;
+    const cached = getCached(cacheKey);
+    if (cached) return res.json(cached);
+
+    try {
+      const apiRes = await fetch(`https://apis.xwolf.space/api/search?q=${encodeURIComponent(q)}`, {
+        signal: AbortSignal.timeout(20000),
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      });
+      const data = await apiRes.json();
+      if (data.success) setCache(cacheKey, data);
+      res.json(data);
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message || "Search failed" });
+    }
+  });
+
   return httpServer;
 }
