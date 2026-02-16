@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation, useSearch } from "wouter";
-import { ArrowLeft, Star, Clock, Loader2, Play, Film, Tv, ChevronDown, AlertTriangle, RefreshCw, ExternalLink, SkipBack, SkipForward } from "lucide-react";
+import { ArrowLeft, Star, Clock, Loader2, Play, Pause, Film, Tv, ChevronDown, AlertTriangle, RefreshCw, ExternalLink, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ContentCard } from "@/components/content-card";
@@ -81,8 +81,8 @@ export default function Watch() {
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [selectedEpisode, setSelectedEpisode] = useState(1);
   const [iframeKey, setIframeKey] = useState(0);
-  const [showControls, setShowControls] = useState(false);
-  const controlsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   const { data: richDetail } = useQuery<RichDetailResponse>({
     queryKey: ["/api/wolflix/rich-detail", detailPathFromUrl],
@@ -184,25 +184,25 @@ export default function Watch() {
     }
   }, [showboxLinks.length]);
 
-  const handlePlayerMouseMove = useCallback(() => {
-    setShowControls(true);
-    if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
-    controlsTimeout.current = setTimeout(() => setShowControls(false), 3000);
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
+    const iframe = document.querySelector('iframe[data-testid="iframe-player"]') as HTMLIFrameElement;
+    if (iframe) {
+      iframe.contentWindow?.postMessage({ type: "toggleMute" }, "*");
+    }
   }, []);
 
-  const handlePlayerMouseLeave = useCallback(() => {
-    if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
-    setShowControls(false);
+  const togglePause = useCallback(() => {
+    setIsPaused(prev => !prev);
+    const iframe = document.querySelector('iframe[data-testid="iframe-player"]') as HTMLIFrameElement;
+    if (iframe) {
+      iframe.contentWindow?.postMessage({ type: "togglePause" }, "*");
+    }
   }, []);
 
   return (
     <div className="min-h-screen bg-black">
-      <div
-        className="relative w-full"
-        style={{ height: "calc(100vh - 49px)" }}
-        onMouseMove={handlePlayerMouseMove}
-        onMouseLeave={handlePlayerMouseLeave}
-      >
+      <div className="relative w-full bg-black" style={{ height: "calc(100vh - 160px)", minHeight: "300px" }}>
         <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-3 py-2 bg-gradient-to-b from-black/80 to-transparent gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Button
@@ -294,98 +294,88 @@ export default function Watch() {
             </div>
           </div>
         )}
+      </div>
 
-        {selectedProvider && (
-          <div
-            className={`absolute inset-0 z-10 flex items-center justify-center pointer-events-none transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0"}`}
-          >
-            <div className="flex items-center gap-4 pointer-events-auto">
-              {showboxLinks.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={tryPrevProvider}
-                  className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-white/80"
-                  data-testid="button-hover-prev"
-                >
-                  <SkipBack className="w-5 h-5" />
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={retryProvider}
-                className="w-16 h-16 rounded-full bg-green-500/80 backdrop-blur-sm text-black"
-                data-testid="button-hover-reload"
+      <div className="bg-black/95 border-t border-green-500/10 px-4 py-2">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={tryPrevProvider}
+              disabled={showboxLinks.length <= 1}
+              className="text-white/70 disabled:text-white/20"
+              data-testid="button-prev-source"
+            >
+              <SkipBack className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={togglePause}
+              className="text-white/80"
+              data-testid="button-pause"
+            >
+              {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={tryNextProvider}
+              disabled={showboxLinks.length <= 1}
+              className="text-white/70 disabled:text-white/20"
+              data-testid="button-next-source"
+            >
+              <SkipForward className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMute}
+              className="text-white/70"
+              data-testid="button-mute"
+            >
+              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2 flex-1 justify-center overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            {showboxLinks.map((link: ShowBoxLink, idx: number) => (
+              <button
+                key={link.provider + idx}
+                onClick={() => { setSelectedProviderIdx(idx); setIframeKey(prev => prev + 1); }}
+                className={`flex-shrink-0 rounded-lg px-3 py-1.5 font-mono text-xs transition-colors ${selectedProviderIdx === idx ? "bg-green-500 text-black font-bold" : "bg-white/10 text-white/70"}`}
+                data-testid={`button-provider-${link.provider}`}
               >
-                <RefreshCw className="w-7 h-7" />
-              </Button>
-              {showboxLinks.length > 1 && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={tryNextProvider}
-                  className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-white/80"
-                  data-testid="button-hover-next"
-                >
-                  <SkipForward className="w-5 h-5" />
-                </Button>
-              )}
-            </div>
+                {link.provider}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={retryProvider}
+              className="text-white/70"
+              data-testid="button-reload-player"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
             {selectedProvider && (
-              <a
-                href={selectedProvider.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="absolute bottom-16 right-4 pointer-events-auto"
-              >
+              <a href={selectedProvider.url} target="_blank" rel="noopener noreferrer">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-white/80"
-                  data-testid="button-hover-external"
+                  className="text-white/70"
+                  data-testid="button-external-link"
                 >
                   <ExternalLink className="w-4 h-4" />
                 </Button>
               </a>
             )}
           </div>
-        )}
-
-        {showboxLinks.length > 0 && (
-          <div className={`absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-3 py-3 transition-opacity duration-300 ${showControls ? "opacity-100" : "opacity-0 hover:opacity-100"}`}>
-            <div className="flex items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-              {showboxLinks.map((link: ShowBoxLink, idx: number) => (
-                <button
-                  key={link.provider + idx}
-                  onClick={() => { setSelectedProviderIdx(idx); setIframeKey(prev => prev + 1); }}
-                  className={`flex-shrink-0 rounded-lg px-3 py-1.5 font-mono text-xs transition-colors ${selectedProviderIdx === idx ? "bg-green-500 text-black font-bold" : "bg-white/10 text-white/70 backdrop-blur-sm"}`}
-                  data-testid={`button-provider-${link.provider}`}
-                >
-                  {link.provider}
-                </button>
-              ))}
-              <button
-                onClick={retryProvider}
-                className="flex-shrink-0 rounded-lg px-3 py-1.5 font-mono text-xs bg-white/10 text-white/70 backdrop-blur-sm flex items-center gap-1"
-                data-testid="button-reload-player"
-              >
-                <RefreshCw className="w-3 h-3" /> Reload
-              </button>
-              {selectedProvider && (
-                <a
-                  href={selectedProvider.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-shrink-0 rounded-lg px-3 py-1.5 font-mono text-xs bg-white/10 text-white/70 backdrop-blur-sm flex items-center gap-1"
-                  data-testid="link-open-current-provider"
-                >
-                  <ExternalLink className="w-3 h-3" /> New Tab
-                </a>
-              )}
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {isTV && (

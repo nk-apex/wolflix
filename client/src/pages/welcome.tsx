@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { Film, Play, TrendingUp, Tv, Clock, Zap, ArrowRight, Activity, Search, ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { Film, Play, TrendingUp, Tv, Clock, Zap, ArrowRight, Activity, Search, ChevronLeft, ChevronRight, Star, Flame, Sparkles } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { useQuery } from "@tanstack/react-query";
-import { type TrendingResponse, type HotResponse, type HomepageResponse, type SubjectItem, getRating, getYear, getPosterUrl, getMediaType } from "@/lib/tmdb";
+import { type TrendingResponse, type HotResponse, type HomepageResponse, type SearchResponse, type PopularSearchResponse, type SubjectItem, getRating, getYear, getPosterUrl, getMediaType } from "@/lib/tmdb";
 import { ContentCard } from "@/components/content-card";
 import { ContentGrid } from "@/components/content-grid";
 import { Link, useLocation } from "wouter";
@@ -40,10 +40,77 @@ export default function Welcome() {
     queryKey: ["/api/wolflix/hot"],
   });
 
+  const { data: popularSearch } = useQuery<PopularSearchResponse>({
+    queryKey: ["/api/wolflix/popular-search"],
+  });
+
+  const popularTerms = popularSearch?.data?.everyoneSearch?.map(s => s.title) || [];
+  const firstPopularTerm = popularTerms[0] || "";
+  const secondPopularTerm = popularTerms[1] || "";
+  const thirdPopularTerm = popularTerms[2] || "";
+
+  const { data: searchResult1, isLoading: search1Loading } = useQuery<SearchResponse>({
+    queryKey: ["/api/wolflix/search", firstPopularTerm],
+    enabled: !!firstPopularTerm,
+    queryFn: async () => {
+      const res = await fetch(`/api/wolflix/search?keyword=${encodeURIComponent(firstPopularTerm)}`);
+      if (!res.ok) return { code: 200, success: true, data: { pager: { hasMore: false, nextPage: "1", page: "1", totalCount: 0 }, items: [] } };
+      return res.json();
+    },
+  });
+
+  const { data: searchResult2, isLoading: search2Loading } = useQuery<SearchResponse>({
+    queryKey: ["/api/wolflix/search", secondPopularTerm],
+    enabled: !!secondPopularTerm,
+    queryFn: async () => {
+      const res = await fetch(`/api/wolflix/search?keyword=${encodeURIComponent(secondPopularTerm)}`);
+      if (!res.ok) return { code: 200, success: true, data: { pager: { hasMore: false, nextPage: "1", page: "1", totalCount: 0 }, items: [] } };
+      return res.json();
+    },
+  });
+
+  const { data: searchResult3, isLoading: search3Loading } = useQuery<SearchResponse>({
+    queryKey: ["/api/wolflix/search", thirdPopularTerm],
+    enabled: !!thirdPopularTerm,
+    queryFn: async () => {
+      const res = await fetch(`/api/wolflix/search?keyword=${encodeURIComponent(thirdPopularTerm)}`);
+      if (!res.ok) return { code: 200, success: true, data: { pager: { hasMore: false, nextPage: "1", page: "1", totalCount: 0 }, items: [] } };
+      return res.json();
+    },
+  });
+
   const bannerItems = homepage?.data?.operatingList?.find(op => op.type === "BANNER")?.banner?.items || [];
   const trendingItems = trending?.data?.subjectList || [];
   const hotMovies = hot?.data?.movie || [];
   const hotTV = hot?.data?.tv || [];
+
+  const allItems = [...hotMovies, ...hotTV, ...trendingItems];
+  const genreGroups: Record<string, SubjectItem[]> = {};
+  allItems.forEach(item => {
+    if (!item.genre) return;
+    item.genre.split(",").map(g => g.trim()).forEach(g => {
+      if (!genreGroups[g]) genreGroups[g] = [];
+      if (!genreGroups[g].find(ex => ex.subjectId === item.subjectId)) {
+        genreGroups[g].push(item);
+      }
+    });
+  });
+  const topGenres = Object.entries(genreGroups)
+    .filter(([, items]) => items.length >= 3)
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, 6);
+
+  const topRated = [...allItems]
+    .filter(i => i.imdbRatingValue && parseFloat(i.imdbRatingValue) > 0)
+    .sort((a, b) => parseFloat(b.imdbRatingValue || "0") - parseFloat(a.imdbRatingValue || "0"))
+    .filter((item, idx, arr) => arr.findIndex(i => i.subjectId === item.subjectId) === idx)
+    .slice(0, 21);
+
+  const newReleases = [...allItems]
+    .filter(i => i.releaseDate)
+    .sort((a, b) => (b.releaseDate || "").localeCompare(a.releaseDate || ""))
+    .filter((item, idx, arr) => arr.findIndex(i => i.subjectId === item.subjectId) === idx)
+    .slice(0, 21);
 
   const heroItems = bannerItems.length > 0
     ? bannerItems.map(b => b.subject).filter(Boolean).slice(0, 8)
@@ -254,6 +321,58 @@ export default function Welcome() {
           type="tv"
           isLoading={hotLoading}
         />
+
+        {topRated.length > 0 && (
+          <ContentGrid
+            title="Top Rated"
+            icon={<Star className="w-5 h-5" />}
+            items={topRated}
+          />
+        )}
+
+        {newReleases.length > 0 && (
+          <ContentGrid
+            title="New Releases"
+            icon={<Sparkles className="w-5 h-5" />}
+            items={newReleases}
+          />
+        )}
+
+        {topGenres.map(([genre, items]) => (
+          <ContentGrid
+            key={genre}
+            title={genre}
+            icon={<Film className="w-5 h-5" />}
+            items={items}
+          />
+        ))}
+
+        {searchResult1 && (searchResult1.data?.items?.length || 0) > 0 && (
+          <ContentGrid
+            title={firstPopularTerm}
+            icon={<Flame className="w-5 h-5" />}
+            items={searchResult1.data.items}
+            isLoading={search1Loading}
+          />
+        )}
+
+        {searchResult2 && (searchResult2.data?.items?.length || 0) > 0 && (
+          <ContentGrid
+            title={secondPopularTerm}
+            icon={<Flame className="w-5 h-5" />}
+            items={searchResult2.data.items}
+            isLoading={search2Loading}
+          />
+        )}
+
+        {searchResult3 && (searchResult3.data?.items?.length || 0) > 0 && (
+          <ContentGrid
+            title={thirdPopularTerm}
+            icon={<Flame className="w-5 h-5" />}
+            items={searchResult3.data.items}
+            isLoading={search3Loading}
+          />
+        )}
       </div>
     </div>
   );

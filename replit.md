@@ -4,10 +4,14 @@
 WOLFLIX is a streaming platform built with React + Vite on the frontend and Express on the backend. It uses the movieapi.xcasper.space API as the data source for movie/TV metadata. Streaming is handled via ShowBox embed players (VidSrc, VidSrc.me, MultiEmbed, AutoEmbed, NontonGo). The app features a dark theme with neon green (#00ff00) accents and glass-morphism card effects.
 
 ## Recent Changes
+- **Feb 16, 2026**: Watch page control bar, expanded home/movies suggestions
+  - Watch page: moved controls below player as persistent control bar (pause, next source, prev source, mute, reload, external link)
+  - Home page: added Top Rated, New Releases, genre-based grids, popular search-based content sections
+  - Movies page: added Top Rated, New Releases, more genre rows, popular search-based content sections
+  - ContentGrid now auto-detects movie/TV type from item data when type prop omitted
 - **Feb 16, 2026**: Music search cards, music play page, watch page hover controls
   - Redesigned Music page with search bar using xwolf search API, results shown as card grid (like movies)
   - Added Music play page (`/music/play/:id`) with MP3/MP4 format selection and streaming player
-  - Added hover-visible playback controls (pause, next, previous, mute) on watch page streaming player
   - Backend proxy route for xwolf search API (`/api/wolflix/music/search`)
 - **Feb 16, 2026**: Music page, grid layouts, fullscreen watch page
   - Added Music page (`/music`) with YouTube MP3/MP4 playback via xwolf APIs

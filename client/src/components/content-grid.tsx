@@ -12,7 +12,7 @@ interface ContentGridProps {
   columns?: number;
 }
 
-export function ContentGrid({ title, icon, items, type = "movie", isLoading }: ContentGridProps) {
+export function ContentGrid({ title, icon, items, type, isLoading }: ContentGridProps) {
   return (
     <div className="mb-8">
       <div className="flex items-center gap-2 mb-4 px-1">
@@ -28,8 +28,8 @@ export function ContentGrid({ title, icon, items, type = "movie", isLoading }: C
                 <Skeleton className="w-3/4 h-3 mt-2 rounded bg-green-900/10" />
               </div>
             ))
-          : items.map((item) => (
-              <ContentCard key={item.subjectId} item={item} type={type} />
+          : items.map((item, idx) => (
+              <ContentCard key={`${item.subjectId}-${idx}`} item={item} type={type} />
             ))}
       </div>
     </div>
